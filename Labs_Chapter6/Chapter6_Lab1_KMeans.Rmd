@@ -1,0 +1,241 @@
+---
+title: "Chapter 6 Lab 1 - K-Means"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Goal
+In this lab, we will learn how to use K-Means for cluster analysis, applied on the DoTalicious data set. We are using `kmeans` function from the built-in `stats` package. We will also be using several other libraries. 
+
+For this lab and subsequent labs, we will using the `Caret` package (http://caret.r-forge.r-project.org/). `caret`, short for **C**lassification **A**nd **RE**gression **T**raining. This is a popular R package that implements a wide range of ML algorithms and processes, including learning, preprocessing, and validation. One advantage of using `caret` is that it standardizes and automates many phases in the training and testing of ML models, which makes it easy to train and compare different ML models.
+
+While we will include an installation step here, you want to still make sure the libraries install correctly, because there may be issues with versions and the current installation you have. So please consult online resources if you encounter problems. 
+
+## Brief refresher
+K-Means is a simple clustering algorithm that discovers centroids of clusters by iteratively assigning labels to data points, until the assignments converge.
+
+## Preparation
+
+```{r}
+#installing necessary libraries
+options(repos = c(CRAN = "http://cran.rstudio.com"))
+install.packages("ggplot2")
+library(ggplot2)
+options(repos = c(CRAN = "http://cran.rstudio.com"))
+install.packages("GGally")
+library(GGally)
+options(repos = c(CRAN = "http://cran.rstudio.com"))
+install.packages("caret", dependencies = TRUE)
+library(caret) # for scaling data
+```
+
+# Step 1: Data Pre-Processing
+
+We first need to load the data. We here use the data discussed in the Chapter, it is a preprocessed data from Dotalicious server for the Dota game. 
+
+```{r}
+# we are assuming the data file is in the current directory. If not, you may want to set the current directory to where the data file is or adjust the path in the read.csv line below.
+
+# read the CSV file
+Dota_data <- read.csv("DoTalicious_cleaned1000players.csv", fileEncoding="UTF-8-BOM")
+summary(Dota_data)
+```
+
+Clean up and set the correct data type. You can use other methods to clean and normalize the data as you learned through the previous chapters. Specifically, we need to figure out what features from the data we will need to exclude, turn time into numeric value, etc. 
+
+```{r}
+# convert TotalTime to a numeric
+Dota_data$TotalTime <- as.numeric(Dota_data$TotalTime)
+
+# exclude the row with SillLevel = SkillLevelNull
+Dota_data$SkillLevel <- as.factor(Dota_data$SkillLevel)
+Dota_data <- Dota_data[!(Dota_data$SkillLevel == " SkillLevelNull"),]
+
+# use factor in place of as.factor to remove " SkillLevelNull" from the list of factors
+Dota_data$SkillLevel <- factor(Dota_data$SkillLevel)
+
+# make the names of levels descriptive
+levels(Dota_data$SkillLevel) <- c("Novice", "Beginner", "Intermediate", "Advanced")
+
+# exclude PlayerID
+Dota_data <- Dota_data[-1]
+
+summary(Dota_data)
+```
+
+Check if there are any missing values (NA here means Not Available). If it returns *False*, we're good to go.
+```{r}
+#omitting any rows with na
+Dota_data = na.omit(Dota_data)
+anyNA(Dota_data)
+```
+
+We will go through the `caret` library and process here. As discussed above, it allows you to utilize algorithms for the Machine Learning pipeline, so it is valuable to use it and learn more about it.  
+
+Further, we are going to use `Euclidean distance` with `K-means`, so scaling is necessary to avoid dominating variables. If you remember, scaling was discussed as part of Chapter 2, if you need a refresher on what it means, please consult that chapter. In this lab, we will use the `caret` package to do this type of preprocesing in a much faster and short-hand way, see below.  
+
+```{r}
+library(lattice)
+library(ggplot2)
+library(caret)
+#Here we will use the preProcess function from the Caret library which is very handy. From the documentation: 
+#method = "center" subtracts the mean of the predictor's data (again from the data in x) from the predictor values  
+# method = "scale" divides by the standard deviation.
+preProcValues <- preProcess(x = Dota_data, method = c("center", "scale"))
+
+#Here we will take the preProc values and apply them to the data. 
+#For more documentation on this process, please see: https://topepo.github.io/caret/index.html (section 3)
+Dota_data <- predict(preProcValues, Dota_data)
+```
+
+Finally, K-means only works with numeric variables, so we will exclude `SkillLevel` from the data.
+
+```{r}
+attribs_except_skill <- -which(names(Dota_data) %in% c("SkillLevel"))
+DotaData_no_skill <- Dota_data[, attribs_except_skill]
+DotaData_no_skill
+```
+
+# Step 2: Visualize the data
+
+As part of the exploratory analysis, we can try visualizing the data first to get a sense of what the data looks like.
+
+Here, we are going to use the library `GGally` to visualize a scatterplot matrix, i.e., a set of pair-wise scatterplots of the variables involved. Remember to install the package using `install.packages("GGally")`, if you have not installed the library.
+
+
+```{r}
+ggscatmat(Dota_data, columns = c(1:5,7:ncol(Dota_data)), 
+          color = "SkillLevel", alpha = 0.8)
+```
+
+Some notes:
+
+* The function `ggscatmat` plots the scatterplot matrix
+* The parameter `columns = c(1:5,7:ncol(Dota_data))` is used to select the variables to plot. Here, we excluded column 6, which is the `SkillLevel` column, as we used it for coloring the plots with parameter `color = \"SkillLevel\"`.
+* `alpha` sets the transparency in the plots
+
+Note that if you would like to know more about the function, type `?ggscatmat` for more information.
+
+It appears that there is no plot showing clear separation between the data points. However, the scatterplot matrix only shows pair-wise relationships, so higher dimensional correlations may still exist in the data.
+
+# Step 3: Use Elbow method to select K
+
+As discussed in the chapter, users need to provide the value `K` for `K-means` to work. In practice, this is a hyperparameter that is usually tuned before running the cluster analysis.
+
+Therefore, we will perform the `K-means` with different `K`s and evaluate which one is best. To do this, we will plot the performance metric values of clustering. As you know from the chapter, there are many methods to evaluate the clusters. We will use the *Within-Cluster Sum of Squares* (WSS) method, with different `K`s. 
+
+The resulting plot is usually concave and eventually flatens out with high `K`s. The value of `K` that lies at the `elbow` of the plot. As discussed in the chapter, we then use the `Elbow method` to determine the best `K` to use. 
+```{r}
+anyNA(Dota_data)
+```
+
+```{r}
+
+set.seed(2063)
+# Determine number of clusters
+max_clus <- 30 # the maximum number of clusters tried
+
+# use WSS to capture clustering quality and plot it
+wss <- (nrow(DotaData_no_skill)-1)*sum(apply(DotaData_no_skill,2,var))
+
+for (i in 2:max_clus) wss[i] <- sum(kmeans(DotaData_no_skill, 
+                                     centers=i, nstart = 10)$withinss)
+
+# plot
+plot(1:max_clus, wss, type="b", xlab="Number of Clusters = K",
+   ylab="Within groups sum of squares")
+
+```
+
+In this graph, it seems that both `K=4`, `k=5`, and `K=8` are good candidates. 
+
+Let's try to compute the silhouette width average scores per number of clusters. Remember that silhouette width average scores are another metric to assess the clusters as discussed in the Chapter. 
+
+```{r}
+library(cluster) 
+silhouette_score <- function(k){
+  km <- kmeans(DotaData_no_skill, centers = k, nstart=25)
+  ss <- silhouette(km$cluster, dist(DotaData_no_skill))
+  mean(ss[, 3])
+}
+k <- 2:10
+avg_sil <- sapply(k, silhouette_score)
+plot(k, type='b', avg_sil, xlab='Number of clusters', ylab='Average Silhouette Scores', frame=FALSE)
+```
+
+From here, we see the `k=5` is the best given this graph and the above. So let's choose `K=5`.
+
+# Step 4: Run K-means
+
+Use `K=5` as the input, run the K-means algorithm again.
+
+```{r}
+selected_K <- 5
+fit <- kmeans(DotaData_no_skill, centers =  selected_K, nstart = 20)
+# get cluster means 
+aggregate(DotaData_no_skill,by=list(fit$cluster),FUN=mean)
+```
+
+The output shows the centroids of the four clusters found by the algorithm.
+
+We can also take a look at the sizes of the clusters and the data to see how it falls into different clusters by doing the following.
+
+```{r}
+#cluster sizes
+fit$size
+
+#a look at the data and clusters
+DotaData_no_skill$cluster <- fit$cluster
+#showing first 30 rows
+head(DotaData_no_skill, 30)
+```
+
+
+# Step 5: Visualize the result
+
+As the final step, the result should be visualized for the expert to scrutinize and decide if the results make sense. For this purpose, we will use the package `factoextra`, which provides the function `fviz_cluster` capable of visualizing the results of many clustering algorithms. Check out the documentation [here](https://cran.r-project.org/web/packages/factoextra/factoextra.pdf)
+
+First, install and load the library.
+
+```{r}
+options(repos = c(CRAN = "http://cran.rstudio.com"))
+install.packages("factoextra", dependencies = TRUE)
+library(factoextra)
+```
+
+Next, visualize the clusters.  
+
+```{r echo=TRUE}
+factoextra::fviz_cluster(fit, data = DotaData_no_skill, geom = "point")
+```
+
+The good thing about `fviz_cluster` when dealing with multi-dimensional data is that it automatically uses PCA to reduce the dimensions of the data to two for easy visualization. That's why the two axes x and y are shown as "Dim1 (71.4%)" and "Dim2 (7.3%)", which means the two principle components chosen here account for a total of `71.4+7.3=78.7%` variation in the data.
+
+While clusters 1 and 4 are well separated, clusters 2 and 3 almost completely overlap. 
+
+We can further add in the `SkillLevel` variable as labels to see where they lie in this visualization. Remember that we excluded them because they were factors and thus will not cluster well with `K-Means`. 
+
+```{r echo=TRUE}
+# rename the skill level to reduce text cluttering
+# This statementrenames the skill level values to reduce text cluttering in the plot
+levels(Dota_data$SkillLevel) <- c("N", "B", "I", "A")
+#THis statement sets `SkillLevel` as the `row.names` of our data, since `fviz_cluster` uses `row.names` to label the points.
+row.names(DotaData_no_skill) <- make.names(Dota_data[,"SkillLevel"], unique = TRUE) 
+#The parameter `geom` in `fviz_cluster` is set to "text" to display labels.
+factoextra::fviz_cluster(fit, data = DotaData_no_skill, geom = "text")
+```
+
+
+It's really hard to read the labels in the clusters, but the labels here you see in the figure are "A" for advanced, "B" for beginner, and "I" is for intermediate. 
+
+However, we can see that clusters do not show great seperation for these labels. 
+
+You may want to tweak the plot to make it easier for expert interpretation, e.g., using other kinds of labels. Or you can use the raw data with clusters or the cluster centroids, and have the expert look at the different clusters to make sense of the data. 
+
+# Further Readings
+* [Pairwise scatterplot matrix of numeric data with ggplot2](https://mran.microsoft.com/snapshot/2016-01-24/web/packages/GGally/vignettes/ggscatmat.html), by Di Cook and Mengjia Ni, 2015
+
+# Conclusion
+In this lab, we showed you how to use `K-means` for cluster analysis. Specifically, we demonstrated the process of cluster analysis, including hyperparameter tuning for `K-means` and visualized the cluster assignments for further inspection. Not all data will be easy to cluster with methods such as `K-means` so keep that in mind as you compare the clusters to the other clusters developed by other algorithms, which will be worked out in the next labs.
+

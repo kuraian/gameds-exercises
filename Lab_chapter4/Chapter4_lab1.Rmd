@@ -1,0 +1,65 @@
+---
+title: "Chapter4_Lab1"
+output:
+  html_document:
+    df_print: paged
+---
+# Goal
+
+The goal of this lab is to show you how to use R to run PCA (Principle Component Analysis) on a dataset and how to interpret the results. 
+
+#Calculcating Principle Components using PCA
+
+The code below reads in a table of data. This data was described in the chapter; it was originally collected from publicaly available repository : http://gta.st.ewi.tudelft.nl/ and then modified for our use here. 
+
+The code below first loads up the data. Then runs PCA using the function <i> princomp </i>. This function takes in the dataset, which we loaded in the variable <i> Dota_data </i>, and as with other functions in R, it takes in several parameters. We are using <i>scores </i>= `TRUE`, which allows the function to compute the scores for each Principle Component (PC) for us to inspect later. The result is stored in the variable <i> pcal. </i> 
+
+We then print that variable to inspect it using the <i> summary</i> function. This will give us the Principle Components and some information on how well they did.
+
+```{r}
+
+Dota_data <- read.table("Dota_normalized.csv", header=TRUE, sep=",")
+
+# performing PCA
+pca <- princomp(Dota_data, scores=TRUE)
+
+```
+
+#How many PCs do We Need? 
+
+The proportion of variance is important here, as it tells you how much of the variance that Principle Component explains. But in order to understand the variance that each component explains, we can also plot the screeplot, see the statements below and the graph produced. A screeplot is defined as a simple line plot that is used here to show the fraction of total variance explained by each Principle Component. As you can see from the graph the amount of variance involved gets smaller and smaller as we add more components. 
+
+```{r}
+#looking at the model
+summary(pca)
+
+#scree plot to figure out how many components we will want
+plot(pca)
+screeplot(pca, type="line", main="Scree Plot")
+```
+
+Given the plot, you can see that 4 PCs explain most of the variance in the data, and thus this is what is used. 
+
+#Understanding the PCs
+
+We then calculate loadings. PCs are actually just linear transformations over the old dimension. The loadings show the coefficients of each principle component given the old dimensions or variables. 
+
+```{r}
+# finding out the loadings
+loadings(pca)
+```
+
+As you can see the table shows each principle component and its value in terms of combinations of the old variables. 
+
+#Using PCs rather than Raw Data
+
+To use the Principle Components instead of the original data, we can use the `scores` part of the result, which is stored in the output variables from the <i> princomp </i> function. The code below shows two datasets. The original for 10 rows of the data. The second dataset shows the three Principle components for the same first 10 rows in the data. 
+
+```{r}
+#showing the data and the PCs for the first 10 rows in the data set
+Dota_data[,1:10]
+pcaValues <- pca$scores
+pcaValues[1:10,1:4]
+```
+
+

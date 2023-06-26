@@ -1,0 +1,180 @@
+---
+title: "Chapter 7 Lab 8 - Decision Tree (DT)"
+output:
+  html_document:
+    df_print: paged
+---
+# Goal
+In this lab, we, again, will try to predict players' skill level, i.e., column `SkillLevel`, which takes integer value between 0 and 3, with 0 being novice level and 3 expert. We will use a `Decision Tree` algorithm, called *CART*, implemented in the package `rpart` for this purpose. Again, this algorithm implementation is wrapped by the `caret` package, which we will used for data preprocessing as well.
+
+*CART* stands for **C**lassification **a**nd **R**egression **T**rees, which is the implementation for `Decision Tree` algorithms that can be used for both classification and regression tasks. For variable selection at internal nodes, `CART` uses `Gini` score, instead of `Information Gain`, to determine the homogenity of the resultant split.
+
+## Brief refresher
+`Decision Tree (DT)` is a powerful classification method, which can also be used for regression tasks. It is able to approximate  non-linear patterns in the data, by consecutively splitting the data according to the values of independent variables.
+
+## Preparation
+
+```{r}
+# install the rpart package if you don't already have it
+options(repos = c(CRAN = "http://cran.rstudio.com"))
+install.packages("caret", dependencies = TRUE)
+install.packages("rpart", dependencies = TRUE)
+library("rpart")
+library("caret")
+```
+
+```{r}
+# (optional) set working directory
+
+# read the CSV file
+DotaData <- read.csv("DoTalicious_cleaned1000players.csv", fileEncoding="UTF-8-BOM")
+summary(DotaData)
+```
+
+Clean up and set the correct data type.
+
+```{r}
+# convert TotalTime
+DotaData$TotalTime <- as.numeric(DotaData$TotalTime)
+
+# exclude the row with SillLevel = SkillLevelNull
+DotaData$SkillLevel <- as.factor(DotaData$SkillLevel)
+DotaData <- DotaData[!(DotaData$SkillLevel == " SkillLevelNull"),]
+
+# use factor in place of as.factor to remove " SkillLevelNull" from the list of factors
+DotaData$SkillLevel <- factor(DotaData$SkillLevel)
+
+# exclude PlayerID
+DotaData <- DotaData[-1]
+
+DotaData = na.omit(DotaData)
+
+summary(DotaData)
+```
+
+Check if there is any missing value (NA here means Not Available). If it returns *False*, we're good to go. As we did in the other labs, if there are any NAs, you can remove the NA row by using the `omit` function. 
+
+```{r}
+anyNA(DotaData)
+```
+
+
+# Step 2: Set up training and test set
+
+```{r}
+# setting the random seed
+set.seed(101)
+#Spliting data as training and test set. Using createDataPartition() function from caret
+indxTrain <- createDataPartition(y = DotaData$SkillLevel,p = 0.75,list = FALSE)
+training <- DotaData[indxTrain,]
+testing <- DotaData[-indxTrain,]
+summary(training)
+summary(testing)
+```
+
+## Data Standardization
+
+No scaling of the data is necessary.
+
+# Step 3: Build the decision tree
+
+The `DT` algorithm implemented in the `rpart` package will be used to build our model. The *train* and *predict* function remains the same as in the case with other `caret` algorithms we used before, with the only difference is in setting the method.
+
+## Train
+Set the method in the `train` function to "rpart" to build a decision tree.
+
+```{r}
+
+set.seed(101)
+ctrl <- trainControl(method="repeatedcv", number = 10, repeats = 3)
+dt_model <- train(SkillLevel ~ ., data = training, method = "rpart", trControl = ctrl, tuneLength = 20, model=TRUE)
+```
+
+Let's take a look at the model 
+```{r}
+#looking at the model
+dt_model
+```
+
+Plotting the cross validation result of tuning the `cp` parameter. `cp` is the stopping parameter and it specifically defines the minimum improvement in the model needed at each node. As you can see from the results the model suggests a specific `cp` that gives us the best accuracy with the training data. Plotting `cp` will make it clearer
+
+```{r}
+plot(dt_model)
+```
+
+## Predict
+
+```{r}
+predicted <- predict(dt_model, newdata = testing)
+confusionMatrix(predicted, testing$SkillLevel )
+```
+
+Examining the accuracy and confusion matrix, we can see that our decision tree model performs even better than SVM with Radial basis function kernel used in the previous lab, which demonstrates the power of tree-based approaches. 
+
+At this point, it seems clear to us that the amount of data representing Class 2 and 3 in our training data is insufficient to adequately characterize data belonging to these two classes. All models we have tried so far cannot seem to detect correctly these rare classes. 
+
+# Step 4: Visualization
+
+Another reason that makes DT popular is the fact that DT is very interpretable. We will demonstrate this point by showing how to visualize this tree and extract insights out of it.
+
+First, install the plotting package for `rpart`. 
+```{r}
+# do not run these steps if you already have the packages installed.
+install.packages("rpart.plot", dependencies = TRUE)
+```
+
+Second, load packages
+```{r}
+library(rpart.plot)
+```
+
+Lastly, visualize the tree, captured by the element `finalModel` in the output object returned by the `train` function. 
+```{r, fig.width=8, fig.height=7}
+rpart.plot(dt_model$finalModel)
+
+```
+
+It turns out that the DT we learnt is extremely simple (yet so powerful!): It just checks the number of games won. If the value is less than 7, the player's SkillLevel is 0, otherwise, 1. This makes sense, as the more games won there are, the more skilled the player is. However, class labels 2 and 3 are never used.
+
+This is a sign that we are having an independent variable that is too strong for our prediction task. So, let's retrain the model without the `GamesWon` variable.
+
+```{r}
+set.seed(101)
+ctrl <- trainControl(method="repeatedcv", number = 10, repeats = 3)
+dt_model <- train(SkillLevel ~ . - GamesWon, data = training, method = "rpart", trControl = ctrl, tuneLength = 20, model=TRUE)
+
+predicted <- predict(dt_model, newdata = testing)
+confusionMatrix(predicted, testing$SkillLevel )
+```
+
+The accuracy is slightly lower, with more mistakes made in predicting Class 0 and 1. Let's visualize it:
+
+```{r, fig.width=8, fig.height=7}
+rpart.plot(dt_model$finalModel)
+```
+
+Interestingly, the DT is again very simple: the Kills variable can be used in place of GamesWon to predict the SkillLevel. It appears that the more total Kills players have, the higher SkillLevel they are, which again makes some sense.
+
+Let's try again, this time excluding both GamesWon and Kills.
+
+
+```{r}
+set.seed(101)
+ctrl <- trainControl(method="repeatedcv", number = 10, repeats = 3)
+dt_model <- train(SkillLevel ~ . - GamesWon - Kills, data = training, method = "rpart", trControl = ctrl, tuneLength = 20, model=TRUE)
+
+predicted <- predict(dt_model, newdata = testing)
+confusionMatrix(predicted, testing$SkillLevel )
+```
+
+Interestingly, the accuracy increases this time. Is this counter-intuitive? No not really. As an excercise, try to explain why.
+
+```{r, fig.width=8, fig.height=7}
+rpart.plot(dt_model$finalModel)
+```
+It turns out that `Assists` can also be very predictive of the players' `SkillLevel`.
+
+If this still does not satisfy your curiosity about what affects a player's `SkillLevel`, you can continue by trying other combinations of independent variables.
+
+# Conclusion
+In this lab, we showed you how `Decision Trees` can help us understand the relationship between `SkillLevel` and other performance metrics, such as `GamesWon` or `Kills`. As you did with other labs, you can compare these results with previous labs. 

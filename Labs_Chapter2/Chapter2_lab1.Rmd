@@ -1,0 +1,107 @@
+---
+title: "Chapter2_Lab1"
+output:
+  html_document:
+    df_print: paged
+---
+# Goal
+This is the first lab of several labs in this chapter. 
+
+In this lab, we will introduce different data types in R. These data types are: vectors, lists, data frame. We will discuss simple examples of variables of these types and ways to manipulate values in these data types. THe definition of these variable types are described in the chapter. Please review the chapter for a theoretical introduction. 
+
+While in this book we will use and introduce different concepts and their use in R, we do not intend for these labs to be tutorials in R. We will use several advanced methods and expect readers to keep up with the pace in the book. Interested readers are advised to pick up a book on R or follow the many online tutorials when we introduce a concept or algorithms that are not completely covered in the labs. 
+
+## Vectors
+In this example, we will create a vector that stores some numbers, we will call this variable: <i> myvariable</i>. 
+Important operation that we can do on all values in this variable are: mean (using function called <i> mean </i>), min (using function called <i> min </i>), max (using function called <i> max </i>), standard deviation (using function called <i> sd </i>), and quantiles (using function called <i> quantile </i>). As discussed in the chapter, this is a simple way to get some descriptive statistics done really quickly. 
+
+```{r}
+myvariable =c(1, 2, 3, 4, 5, 5, 5, 10, 4, 3, 2)
+#mean
+mean (myvariable)
+#min 
+min(myvariable)
+#max
+max(myvariable)
+#standard dev
+sd(myvariable)
+#qauntiles
+quantile(myvariable)
+```
+
+Another operation that is important to do is to get an idea of how the data is shaped and distributed. We can do that through the use of visualization by plotting a histogram through calling (<i> hist </i> function)  
+```{r}
+library(plyr)
+hist(myvariable)
+```
+
+We can also do a count on the different values within the variable, in other words, a frequency count, using <i> count </i>function. 
+```{r}
+
+count(myvariable)
+```
+
+In addition to getting descriptive statistics as discussed above, it is also important to do specific operations within the vector. An example is removing specific values within the vector. The example below shows you how to remove the element in indexes 2 and 4. The minus sign is used here to indicate that you want the vector without these indexes. As you can see by the example below, indexes of vectors in such operations are counted from 1 not 0 as with other languages.  
+```{r}
+myvariable
+myvariable[c(-2,-4)]
+```
+
+You can also remove every other value in a vector usign logical c(TRUE, FALSE). 
+```{r}
+myvariable
+myvariable[c(TRUE, FALSE)]
+```
+
+## Factors
+Factors is another data type that is important. This is similar to an Enum data type in other programming languages. A good example of that is hero types, such as mage, fighter, scout, etc. To make a new variable of type factor, we just use the  <i>factor </i> function, as follows:
+```{r}
+heroType <- c("fighter", "scout", "fighter")
+heroType <- factor (heroType, levels=c("fighter", "scout", "mage"))
+heroType
+```
+
+
+## Lists
+
+Lists is another data type that you can use in R. Lists allow you to add multiple different types of data in a container. For example, we can make a new list called <i> listPlayers </i>that contains a list of names of players and list of scores for each player. Here is how you can instanitate such as variable.  
+```{r}
+listPlayers <- list(names= c("Tammy", "John", "Katherine", "Tom"), score= c(10,10,20, 20))
+```
+
+You can then index the different parts of the list as follows: 
+```{r}
+listPlayers$score
+listPlayers$names
+```
+
+Further, you can also apply the different functions we applied on the vector above to compute descriptive statistics on the numeric data. For example, one can get the mean of all the scores. 
+```{r}
+mean(listPlayers$score)
+```
+
+## Dataframe
+
+Dataframes are one of the most important data types as it is the most constantly used data type in manipulation of data as we will see throughout the book. 
+It works in a similar way to a list. To define a dataframe, you can use the <i>data.frame</i> operation as follows:
+
+```{r}
+listPlayers <- data.frame(names= c("Tammy", "John", "Katherine", "Tom"), score= c(10,10,20, 20))
+listPlayers
+```
+
+Similar to lists, you can also reference the different columns in the dataframe as follows:
+```{r}
+listPlayers[2]
+listPlayers$score
+```
+
+We can then do different operations on the data. For example, we can get all the scores that are higher than 20, as follows: 
+```{r}
+listPlayers
+scoresHigherThan20 = listPlayers$score >=20
+scoresHigherThan20
+listPlayers[scoresHigherThan20,]
+
+```
+

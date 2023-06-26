@@ -1,0 +1,110 @@
+---
+title: "Chapter 7 Lab 1 - Linear Regression"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Goal
+In this lab, we continue to use the DoTalicous data set, which was discussed thoroughly in previous chapters. In this lab we will focus on predicting a player's number of kills using `Linear Regression` (LR). This is just an example, you can focus on other variables, but you want to make sure they are continous for `LR`. 
+
+In DoTA, a player's number of kills partially reflects the player's performance in a game, as generally a winning team emerges with a higher number of kills as compared to the opponent team. Therefore, it would be interesting to know whether this can be predicted from other performance indicators, such as the number of deaths or assists. 
+
+Just like in Chapter 6, we are using the `caret` package for this and subsequent labs for cleaning and preprocess the data.
+
+
+```{r}
+# preparation: import libraries to be used. 
+
+options(repos = c(CRAN = "http://cran.rstudio.com"))
+install.packages("caret", dependencies = TRUE)
+library("caret")
+```
+
+# Step 1: Load and explore the data set 
+
+First, we need to load the data set and examine it. In the cell below, the data is loaded as a *data frame* into the variable `DotaData`. 
+
+```{r}
+# we are assuming the data file is in the current directory. If not, you may want to set the current directory to where the data file is or adjust the path in the read.csv line below.
+
+# read the CSV file
+DotaData <- read.csv("DoTalicious_cleaned1000players.csv", fileEncoding="UTF-8-BOM")
+summary(DotaData)
+```
+
+A few observations: 
+
+  1. Most features take continuous quantitative values, except `PlayerID` and `SkillLevel` 
+  2. `SkillLevel` has one missing value, namely `SkillLevelNull`
+  3. `TotalTime` was loaded as a discrete variable.
+
+Therefore, we are going to convert `TotalTime` into a quantitative variable and exclude `PlayerID`. Further, we will also ignore `SkillLevel` from our set of independent variables. 
+
+```{r}
+#turning total time into numeric
+DotaData$TotalTime <- as.numeric(DotaData$TotalTime)
+
+# exclude PlayerID
+DotaData <- DotaData[-1]
+
+summary(DotaData)
+```
+
+# Step 2: Preprocess the data
+
+Normalization is not necessary to run `LR`, although it could be helpful sometimes to avoid the colinearity problem or speed up the runtime. For this data set, the variables are not very correlated, and thus we can avoid this process. However, we will keep it as an exercise for you to use the methods discussed in Chapter 2 to standardize the data and compare the results. 
+
+# Step 3: Fit (i.e., Train) the Linear Regression Model
+
+`Linear Regression` is already implemented in the core library of R, so there is no need to load it. We could, therefore, proceed to fitting a multiple linear regression  model on the data. 
+
+```{r}
+# we will use the lm method, if you remember, we used this method in Chapter 3 for ANOVA. This is because ANOVA is part of the generalized Linear Models.
+#remember we are also excluding the skill level from the data as discussed above
+
+#execute lm to predict Kills given all DotaData minus SkillLevel
+fit <- lm(Kills ~ . - SkillLevel, data = DotaData)
+
+#look at the model's fit. Particularlly interesting in the R-squared metric as discussed in the book chapter. 
+summary(fit)
+```
+
+In the above cell:
+ * `lm` (linear model) is the function name
+ * the first parameter corresponds to the formula to fit the linear model onto. In this case, the variable before tilde (`Kills`) is the dependent variable, while the term after the tilde, i.e., `. - SkillLevel` means that we are selecting **all** other attributes, except `SkillLevel` as independent variables.
+ * the second parameter indicates which data set we would like to use for training, which in this case is `DotaData`.
+
+In the output, there are a few observations:  
+
+ 1. Both multiple R-squared and adjusted R-squared values are very close to 100% (~99%). This means the learned model fits the data very well.  
+ *Note:* In general, when there are more than one independent variables, adjusted R-squared is preferable than R-squared, because it adjusts the statistics with respect to the number of independent variables.
+ 2. Both F-statistics and p-value point to statistical significance, i.e., p-value `< 0.05`. Statistical significance indicates that the pattern found has extremely low chance of occuring by chance, which means we can conclude with great confidence that there is indeed a linear relationship between the independent and dependent variables. 
+
+# Step 3: Interpret the Result
+
+In this step we still refer to the summary of the fitted model as obtained above.
+
+```{r}
+summary(fit)
+```
+
+The *Estimate* column in the Coefficients matrix contains the computed coefficiens from the `LR` model, corresponding to the respective independent variables. Each coefficient indicates the amount of change the respective variable has on the predicted value. For instance, the coefficient of `GamesPlayed` being `-3.77` indicates that as the number of games played increase by 1, the dependent variable (i.e., number of kills) decreases by `3.77`. The larger a coefficient's absolute value is, the more weight it carries (or more **important** it is) when predicting the dependent variable. 
+
+
+Examining the *Estimate* column, we observe that:
+
+ 1. The feature with the most weight in the prediction, i.e., highest absolute coefficient, is `KillsPerMin`. This makes sense, since the number of kills per minute is just the number of kills divided by the total time in minutes. Unfortunately, this means the model we learned is likely trivial as it does not tell us much about other variables.
+ 2. Other significant features include `GamesPlayed`, `GamesWon`, `GamesLeft`, `Ditches`, `RaxDestroyed`. 
+ 
+Note that we often do not interpret the *Intercept*. The intercept is the mean value of the target variable y when x = 0. If x never is 0 then it has no real meaning. 
+
+Due to the first observation, it is necessary to train the model again, this time not including `KillsPerMin`, to get a more substantial model. We will leave this as an exercise for you to do. 
+
+# Conclusion
+In this lab, we showed how regression analysis (in this case, using a multiple linear regression model) can help us gain better understanding of how different game statistics are related with one another in the DOTA game.
+
+<!-- # Appendix: R Markdown Instructions -->
+<!-- Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*. -->
+
+<!-- When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file). -->

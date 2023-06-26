@@ -1,0 +1,140 @@
+---
+title: "Chapter 7 Lab 9 - Random Forest (FR)"
+output:
+  html_document:
+    df_print: paged
+---
+# Goal
+In this lab, we, again, will try to predict players' skill level, i.e., column `SkillLevel`, which takes integer value between 0 and 3, with 0 being novice level and 3 expert using `Random Forest`. 
+There are many different implementations of `Random Forest (RF)` that are wrapped and provided in `caret` (check out this [link for available models in `caret`](https://topepo.github.io/caret/available-models.html)). We are going to use the implementation by `ranger`, since it is reportedly faster than others, and it provides more freedom to tune the parameters.
+
+## Brief refresher
+`Random Forest (RF)` is an *ensemble* method, i.e., a collection of models, that builds upon decision trees, thus the *forest* in its name. As such, it is able to capture non-linearity in the data, more robust to noise, and less prone to overfitting. 
+
+## Preparation
+
+```{r}
+# install the packages if you don't already have them
+# install.packages(c("e1071", "ranger", "dplyr"))
+options(repos = c(CRAN = "http://cran.rstudio.com"))
+install.packages("caret", dependencies = TRUE)
+install.packages("e1071", dependencies = TRUE)
+install.packages("ranger", dependencies = TRUE)
+install.packages("dplyr", dependencies = TRUE)
+library("e1071")
+library("ranger")
+library("dplyr")
+library("caret")
+```
+
+```{r}
+# (optional) set working directory
+# read the CSV file
+DotaData <- read.csv("DoTalicious_cleaned1000players.csv", fileEncoding="UTF-8-BOM")
+summary(DotaData)
+```
+
+Clean up and set the correct data type.
+
+```{r}
+# convert TotalTime
+DotaData$TotalTime <- as.numeric(DotaData$TotalTime)
+
+# exclude the row with SillLevel = SkillLevelNull
+DotaData$SkillLevel <- as.factor(DotaData$SkillLevel)
+DotaData <- DotaData[!(DotaData$SkillLevel == " SkillLevelNull"),]
+
+# use factor in place of as.factor to remove " SkillLevelNull" from the list of factors
+DotaData$SkillLevel <- factor(DotaData$SkillLevel)
+
+# exclude PlayerID
+DotaData <- DotaData[-1]
+DotaData = na.omit(DotaData)
+
+summary(DotaData)
+```
+
+Check if there is any missing value (NA here means Not Available). If it returns *False*, we're good to go. As we did with previous lab, we can remove the NA rows by using the `omit` function. 
+
+```{r}
+anyNA(DotaData)
+```
+
+# Step 2: Set up training and test set
+
+```{r}
+# setting the random seed
+set.seed(101)
+#Spliting data as training and test set. Using createDataPartition() function from caret
+indxTrain <- createDataPartition(y = DotaData$SkillLevel,p = 0.75,list = FALSE)
+training <- DotaData[indxTrain,]
+testing <- DotaData[-indxTrain,]
+summary(training)
+summary(testing)
+```
+
+## Data Standardization
+No scaling of the data is necessary.
+
+# Step 3: Build the random forest
+
+The `random forest` algorithm we are using is implemented in the `ranger` package. The *train* and *predict* function remains the same as in the case with other `caret`-wrapped algorithms we used before, with the only difference is in setting the method.
+
+## Train
+Set the method in the `train` function to *ranger* to build the `random forest`. 
+
+```{r}
+
+set.seed(101)
+ctrl <- trainControl(method="repeatedcv", number = 10, repeats = 3)
+rf_model <- train(SkillLevel ~ ., data = training, method = "ranger",
+                  importance = "permutation",
+                  trControl = ctrl, tuneLength = 10)
+```
+
+Note that there was one more parameter, namely `importance`, set in the above `train`. This parameter, when set, will add an element called `varImp` to the final model that we can refer to for the variables' importance values. In this case, we indicated the use of value permutation to compute importance, hence value *permutation*. A link to different approaches in computing importance values can be found in further readings. 
+
+Let's take a look at the model.
+```{r}
+#looking at the model
+rf_model
+```
+
+Plotting the cross validation results.
+
+```{r}
+plot(rf_model)
+```
+
+The x-axis shows the values of `mtry`, i.e., number of randomly selected predictors (or trees in this case), and y-axis accuracy. It seems that the split rule using `extratrees` peforms consistently better than `gini` scores, although not significantly so (difference less than 0.6\%).
+
+## Predict
+
+```{r}
+predicted <- predict(rf_model, newdata = testing)
+confusionMatrix(predicted, testing$SkillLevel )
+```
+
+Examining the accuracy and confusion matrix, we can see that our `RF` model performs pretty good (in fact, the best performance so far at 89.77\% accuracy), with high accuracy in predicting the dominating classes 0 and 1. The refreshing thing is that `RF` is able to label one instance of class 3 correctly, unlike other models that did not attempt to capture data of this class.
+
+# Step 4: Examining independent variables' importance
+
+As discussed in Chapter 7, a by-product of `RF` is the importance values of input features that allow us to understand each feature's contribution/weight to the model's accuracy. We have indicated in our `training` function that we'd like features' importance to be computed, so let's check them out.
+
+```{r}
+varImp(rf_model)
+```
+
+Alternatively, you can also plot these importance values.
+
+```{r}
+plot(varImp(rf_model))
+```
+
+As it turns out, `GamesWon` is the most important variable, followed by `Kills`, then `Assists`, and so on. Hmm, this order makes some sense, but looks weirdly familiar? Right, you encountered the same order in Lab 7.8 with decision trees. In this lab, in the attempt to understand how predictive different input features are towards `SkillLevel`, we build many trees, each time excluding one more variable that is deemed to be too predictive. And the order of exclusion is the same as what is shown here. The beauty of getting the importance values here is that we just need to train the `RF` model once, and right away are able to assess the features' significance.
+
+Note that the importance values are scaled to 0-100, so 100 here does not mean 100\% effect on accuracy, but rather the highest impact on accuracy. So, `GamesWon` has the highest impact. At the end of the list are `Points` and `TotalTime`. This means: knowing a player who has a high total number of points or who has spent more time playing the game does not help much in distinguishing good from bad players.
+
+
+# Conclusion
+In this lab, we showed you how to build a random forest model that captures the relationship between `SkillLevel` and other performance metrics, such as `GamesWon` or `Kills`. Examining the importance measures of input features, we are able to recognize features with great and low impact on the predictive accuracy. 

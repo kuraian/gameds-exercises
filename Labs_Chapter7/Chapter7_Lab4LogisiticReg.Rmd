@@ -1,0 +1,144 @@
+---
+title: "Chapter 6 Lab 4 - Logistic Regression"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Goal
+In this lab, we, again, will try to predict players' skill level, i.e., column `SkillLevel`, which takes integer value between 0 and 3, with 0 being novice level and 3 expert. As we have more than two values for the class variable `SkillLevel`, we are going to apply **Multinomial Logistic Regression**, i.e., `Logistic Regression` for more than two class values, instead of the vanilla version that only deals with binary classification case. We will use the `Logistic Regression` implementation in the `nnet` package, since that in the `caret` package is not as robust.
+
+## Brief refresher
+Similar to `Naive Bayes`, `Logistic Regression` estimates class probabilities, instead of directly predicting the class like KNN. `Logistic Regression` assumes that the probabilities can be approximated by passing a linear combination of independent variables' values through a logistic function. You can therefore see where the linear assumption and the `logistic` part of its name comes from.
+
+## Preparation
+Though we will not use the `caret` package for the logistic regression model, we will still import it to leverage the preprocessing capabilities. 
+
+```{r}
+# install packages: should be run only once
+
+options(repos = c(CRAN = "http://cran.rstudio.com"))
+install.packages("caret", dependencies = TRUE)
+install.packages("nnet", dependencies = TRUE)
+
+# import the "nnet" library
+library("nnet")
+
+# import the "caret" library for preprocessing features
+library("caret")
+```
+
+# Step 1: Load the data set 
+
+```{r}
+# (optional) set working directory
+# setwd("../data/")
+# read the CSV file
+DotaData <- read.csv("DoTalicious_cleaned1000players.csv", fileEncoding="UTF-8-BOM")
+summary(DotaData)
+```
+
+Clean up and set the correct data type.
+
+```{r}
+# convert TotalTime
+DotaData$TotalTime <- as.numeric(DotaData$TotalTime)
+
+# exclude the row with SillLevel = SkillLevelNull
+DotaData$SkillLevel <- as.factor(DotaData$SkillLevel)
+DotaData <- DotaData[!(DotaData$SkillLevel == " SkillLevelNull"),]
+
+# use factor in place of as.factor to remove " SkillLevelNull" from the list of factors
+DotaData$SkillLevel <- factor(DotaData$SkillLevel)
+
+# exclude PlayerID
+DotaData <- DotaData[-1]
+
+DotaData = na.omit(DotaData)
+
+summary(DotaData)
+```
+
+# Step 2: Set up training and test set
+Again, this step is similar to the previous lab. 
+
+```{r}
+# setting the random seed
+set.seed(101)
+#Spliting data as training and test set. Using createDataPartition() function from caret
+indxTrain <- createDataPartition(y = DotaData$SkillLevel,p = 0.75,list = FALSE)
+training <- DotaData[indxTrain,]
+testing <- DotaData[-indxTrain,]
+summary(training)
+summary(testing)
+```
+
+## Data Standardization
+We standardize the data, so that it makes it easier to assess the effects of different independent variables on *SkillLevel* in post-processing.
+
+Compute preprocessing values from training data.
+
+```{r}
+preProcValues <- preProcess(x = training,method = c("center", "scale"))
+preProcValues
+```
+
+Apply preprocessing on both training and test data.
+
+```{r}
+# transform the training data using preProcValues
+trainTransformed <- predict(preProcValues, training)
+summary(trainTransformed)
+
+# Apply the same processing, using preprocessing information from the training data, onto the test data
+testTransformed <- predict(preProcValues, testing)
+summary(testTransformed)
+```
+
+# Step 3: Apply the Logisitic Regression model
+
+Now, we are applying the `Logistic Regression` model on the data and applying it to predict class values for the `testTransformed` data.
+
+## Train
+Note that in the code below, we indicate that the `multinom` is a function taken from the *nnet* library. This is useful when we import libraries with potentially similar function names.
+
+```{r}
+lr_model <- nnet::multinom(SkillLevel ~ ., data = trainTransformed)
+```
+
+The default number of iterations is 100. From the output of the training routine, it seems that the model did not converge with this number of iterations. We'll try to increase the number of iterations, using the parameter `maxit` (i.e., maximum number of iterations).
+
+```{r}
+
+lr_model <- multinom(SkillLevel ~ ., data = trainTransformed, maxit = 500)
+```
+
+It turns out that though the algorithm converges at around iteration 190, its value at iteration 100 is pretty close.
+
+```{r}
+#looking at the summary of the model produced
+summary(lr_model)
+```
+
+Meaning of the model's summary:  
+
+* *Coefficients* show the estimated values of coefficients
+* *Std. Error* shows the standard errors of the estimation 
+* *Residual Deviance* and *AIC* represent the performance of the model on the training data, and are useful for model selection and evaluation, which we will talk more about in Chapter 8.
+
+## Predict
+
+```{r}
+predicted <- predict(lr_model, newdata = testTransformed)
+confusionMatrix(predicted, testTransformed$SkillLevel )
+```
+
+Results look pretty good, with accuracy being 86.51\%, as compared to 81.86\% of `KNN` and 80\% of `Naive Bayes`. That said, from the confusion matrix, it apepars that `Logistic Regression` made very little attempt in trying to classify class 2 and class 3.
+
+# Conclusion
+In this lab, we showed how to train a `Logistc Regression` model for multinomial classification tasks, using the *caret* package.
+
+<!-- # Appendix: R Markdown Instructions -->
+<!-- Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*. -->
+
+<!-- When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file). -->

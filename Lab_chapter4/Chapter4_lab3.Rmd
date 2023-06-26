@@ -1,0 +1,42 @@
+---
+title: "Chapter4_Lab3"
+output:
+  html_document:
+    df_print: paged
+---
+# Goal
+
+The goal of this lab is to show you how to use R to perform feature selection. We will specifically  show you how to perform forward and backward selection. The chapter discussed several other types. We will however, not cover them in this lab, but encourage you to try them as an exercise.
+
+First, we will read in a table that contains 15 variables for the game Dota that we have used thoughout the chapter. So in this case there are 15 features: GamesPlayed, GamesWon, GamesLeft, Ditches, Points, Kills, KillsPerMin, Deaths, Assists, CreepsKilled, CreepsDenied, NeutralsKilled, TowersDestroyed, RaxsDestroyed, and TotalTime. 
+
+```{r}
+
+#loading the data
+Dota_data <- read.table("Dota_normalized.csv", header=TRUE, sep=",")
+
+Dota_data
+```
+
+# Backward Feature Selection
+We will then perform backward selection. As discussed in the chapter this means that we will start with an empty set and add features based on their AIC values. To call backward feature selection, we call the step function in R with the linear model `lm` on a depedant variable, in this case we will use `Kills`, with all other features as independant variables. When calling `lm` we will need to specific direction of the search, which is `backward` in this case. The features that the algorithm kept in the end are the selected features.
+
+```{r}
+# Backward Selection using linear regression, which will be discussed in more detail in Chapter 6 and its labs
+step(lm(Kills ~ ., data=Dota_data), direction="backward")
+```
+
+In this example, the backward search didn't choose to remove any of the features as removing any of them produced a worse `AIC` (see chapter for more details on how that scoring system works) value. Therefore, the solution was perserved with the total number of parameters. Let's see if the forward search does any better.
+
+# Forward Feature Selection
+
+Similar to the backward feature selection, we can also perform forward feature selection using the step function and linear model with the `forward` type selection process. This is shown in the code below. This results in 15 features as shown in the results. Again the intermediate steps show that the process started with a null set and then features were selected for inclusion based on AIC. 
+
+```{r}
+# Forward Selection
+
+step(lm(Kills~1, data=Dota_data), direction = "forward", scope = ~ GamesPlayed+GamesWon+GamesLeft+Ditches+Points+ KillsPerMin+Deaths+Assists+CreepsKilled+CreepsDenied+NeutralsKilled+TowersDestroyed+RaxsDestroyed+TotalTime)
+
+```
+
+In conclusion, this lab went through the steps to perform forward and background feature selection process where the modeling ceriteria was to model `kills` as an dependant variable and all the other features in the data as indepedant variables. As an exercise, you can play around with the predicted variable to see what results you get. You can also try other types of search algorithms. 

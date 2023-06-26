@@ -1,0 +1,159 @@
+---
+title: "Chapter 6 Lab 2 - Fuzzy C-Means"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Goal
+In this lab, we will learn how to use Fuzzy C-Means for cluster analysis, applied on the DoTalicious data set.
+
+We are using `fanny` function from the `cluster` package. More about the cluster package can be seen at: https://cran.r-project.org/web/packages/cluster/cluster.pdf, see page 38.
+
+## Brief refresher
+Fuzzy C-Means extends K-Means by allowing data points to have membership with more than one clusters. For example, a data point can have 40% membership with Cluster 1 and 60% membership with Cluster 2.
+
+## Preparation
+The following steps in prepraration of the data is similar to Lab 6.1. 
+
+```{r}
+library(cluster) # for Fuzzy C-means algo
+library(ggplot2)
+library("GGally") # for visualization of scatterplot matrix
+
+library(factoextra) # for visualization of results
+
+```
+
+# Step 1: Load the data set 
+
+Again, this step is similar to Lab 6.1. 
+```{r}
+
+# read the CSV file
+Dota_Data <- read.csv("DoTalicious_cleaned1000players.csv", fileEncoding="UTF-8-BOM")
+summary(Dota_Data)
+```
+
+Clean up and set the correct data type. This is similar to Lab 6.1, so you can skip over this step if you already have the data cleaned and transformed. 
+
+```{r}
+# convert TotalTime
+Dota_Data$TotalTime <- as.numeric(Dota_Data$TotalTime)
+
+# exclude the row with SillLevel = SkillLevelNull
+Dota_Data$SkillLevel <- as.factor(Dota_Data$SkillLevel)
+Dota_Data <- Dota_Data[!(Dota_Data$SkillLevel == " SkillLevelNull"),]
+
+# use factor in place of as.factor to remove " SkillLevelNull" from the list of factors
+Dota_Data$SkillLevel <- factor(Dota_Data$SkillLevel)
+
+# make the names of levels descriptive
+levels(Dota_Data$SkillLevel) <- c("N", "B", "I", "A")
+
+# set row.names for visualization of clusters later
+row.names(Dota_Data) <- make.names(Dota_Data[,"SkillLevel"], unique = TRUE) 
+
+# exclude PlayerID
+Dota_Data <- Dota_Data[-1]
+
+summary(Dota_Data)
+```
+
+Check if there is any missing value (NA here means Not Available). If it returns *False*, we're good to go. If not, we will need to omit the rows that has NAs in them. 
+
+```{r}
+anyNA(Dota_Data)
+Dota_Data = na.omit(Dota_Data)
+```
+
+Unlike with Lab 6.1, there is no need to scale the data, because `fanny` has a built-in feature to scale the data.
+
+Finally, similar to `K-means` Fuzzy C-Means also only works with numeric variables, so we will exclude `SkillLevel` from the data.
+ 
+```{r}
+attribs_except_skill <- -which(names(Dota_Data) %in% c("SkillLevel"))
+DotaData_NoSkill <- Dota_Data[, attribs_except_skill]
+```
+
+# Step 2: Run Fuzzy C-means
+
+From Lab 6.1, we know that with `K-Means`, `K=5` is a good number of clusters, so we are going to use the same setting here.
+
+```{r}
+#setting the seed
+set.seed(2063)
+#setting the K value
+selected_K <- 5
+
+#call the fanny function to determine the fuzzy clusters
+
+fit <- fanny(DotaData_NoSkill, 
+             k = selected_K, 
+             metric = 'euclidean',
+             stand = TRUE,
+             memb.exp = 1.5)
+
+# show membership
+head(fit$membership)
+```
+
+The output shows the membership assigned to the data.
+
+Then similar to the previous lab, we will look at the data and clusters. Here since every data point would belong to several clusters, you can either inspect the belonginess per data point through the membership variable above to look at the data with a cluster variable that is computed as the max memebership given all cluster values. So given the rows above for example, the first data point would belong to Cluster 1, and the second to Cluster 2, etc. 
+
+```{r}
+#cluster sizes
+fit$size
+
+#a look at the data and clusters
+DotaData_NoSkill$cluster <- fit$cluster
+#showing first 30 rows
+head(DotaData_NoSkill, 30)
+```
+
+
+# Step 5: Visualize the result
+
+As the final step, the result should be visualized for the expert to scrutinize and decide if the results make sense. For this purpose, similar to Lab 5.1, we will use the package `factoextra`, which provides the function `fviz_cluster` capable of visualizing the results of many clustering algorithms. Check out the documentation [here] (https://cran.r-project.org/web/packages/factoextra/factoextra.pdf)
+
+```{r echo=TRUE}
+factoextra::fviz_cluster(fit, data = DotaData_NoSkill, geom = "point")
+```
+
+Notice how the vizualization is quite similar to that of `K-means` from Lab 6.1.
+
+Re-visualize the clusters with our `SkillLevel` variable as labels.
+
+```{r echo=TRUE} 
+factoextra::fviz_cluster(fit, data = DotaData_NoSkill, geom = "text")
+```
+
+It's really hard to read the labels in the clusters, but we can see that cluster 4 is dominated by Beginner players, with a few Advanced players.
+
+You may want to tweak the plot to make it easier for expert interpretation, e.g., using other kinds of labels. 
+
+
+<!-- The following causes error when reviewing. It only works when compiled to final HTML file using Knit (in the menu above) -->
+Finally, visualize the silhouette plot to show the quality of the clustering.
+
+```{r echo=TRUE}
+# visualize silhouette coefficients
+factoextra::fviz_silhouette(fit, palette = "jco", ggtheme = theme_minimal())
+
+```
+
+The plot shows all data points' silhouette values, each of which ranges between -1 and 1, sorted in decreasing order in each cluster. A high Silhouette value, i.e., close to 1, indicates the data point well matches its assigned cluster. Ideally, we would like to see all values close to 1, which is clearly not the case here.
+
+We can observe that in clusters 1, 2 and 5, the silhouette values range between -0.4 and 0.4, which signals that about half of the data in those clusters could have been assigned to a different one, i.e., they do not match their assigned cluster very well. Data in cluster 4 and, especially, Cluster 3 received better silhouette values, but they are all less than 0.5. This means the points in those clusters are reasonably clustered.
+
+Overall, our clustering result is not very good, with the average silhouette value (or width) being only 0.24. Some potential reasons for this include:
+
+* the data does not have good cluster tendency, i.e., they might be sparse and separated, or
+* the data has cluster tendency, but the clusters may not be spherical in shape.
+
+# Further Readings
+* [factoextra v1.0.5](https://www.rdocumentation.org/packages/factoextra/versions/1.0.5), by Alboukadel Kassambara, 2018
+
+# Conclusion
+In this lab, we showed you how to use Fuzzy C-means for cluster analysis. This lab follows the previous lab as `Fuzzy C-means` is similar to `K-means`. The clusters also look similar. But you can play around with the data or the parameters and see how the clusters vary. 

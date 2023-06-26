@@ -1,0 +1,114 @@
+---
+title: "Chapter 7 Lab 5 - Linear Discriminant Analysis (LDA)"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Goal
+In this lab, we, again, will try to predict players' skill level, i.e., column `SkillLevel`, which takes integer value between 0 and 3, with 0 being novice level and 3 expert. We will continue to use the `caret` package for this model.
+
+
+## Brief refresher
+`Linear Discriminant Analysis` (LDA) is a method that uses vector space projection to find the best linear decision hyperplanes that separate the classes.
+
+## Preparation
+
+The `caret` package's `LDA` is taken from the `MASS` package.
+
+```{r}
+options(repos = c(CRAN = "http://cran.rstudio.com"))
+install.packages("MASS", dependencies = TRUE)
+install.packages("caret", dependencies = TRUE)
+library("MASS")
+library("caret")
+```
+
+# Step 1: Load the data set 
+
+```{r}
+# (optional) set working directory
+
+# read the CSV file
+DotaData <- read.csv("DoTalicious_cleaned1000players.csv", fileEncoding="UTF-8-BOM")
+summary(DotaData)
+```
+
+Clean up and set the correct data type.
+
+```{r}
+# convert TotalTime
+DotaData$TotalTime <- as.numeric(DotaData$TotalTime)
+
+# exclude the row with SillLevel = SkillLevelNull
+DotaData$SkillLevel <- as.factor(DotaData$SkillLevel)
+DotaData <- DotaData[!(DotaData$SkillLevel == " SkillLevelNull"),]
+
+# use factor in place of as.factor to remove " SkillLevelNull" from the list of factors
+DotaData$SkillLevel <- factor(DotaData$SkillLevel)
+
+# exclude PlayerID
+DotaData <- DotaData[-1]
+
+DotaData = na.omit(DotaData)
+
+summary(DotaData)
+```
+
+# Step 2: Set up training and test set
+
+This step is again similar to the other labs. 
+
+```{r}
+# setting the random seed
+set.seed(101)
+#Spliting data as training and test set. Using createDataPartition() function from caret
+indxTrain <- createDataPartition(y = DotaData$SkillLevel,p = 0.75,list = FALSE)
+training <- DotaData[indxTrain,]
+testing <- DotaData[-indxTrain,]
+summary(training)
+summary(testing)
+```
+
+## Data Standardization
+
+No need to do this for this particular method.
+
+# Step 3: Apply the LDA model
+
+Now, we are applying the `LDA` model on the data and apply it to predict class values for the `testing` data.
+
+## Train
+
+Use the same `train` function, but change the method to *lda* instead.
+
+```{r}
+
+set.seed(101)
+ctrl <- trainControl(method="repeatedcv", number = 10, repeats = 3)
+lda_model <- train(SkillLevel ~ ., data = training, method = "lda", trControl = ctrl, tuneLength = 20)
+```
+
+
+```{r}
+lda_model
+```
+No tuning was necessary. The accuracy appears to be low.
+
+## Predict
+
+```{r}
+predicted <- predict(lda_model, newdata = testing)
+confusionMatrix(predicted, testing$SkillLevel )
+```
+
+Results is not as good as with other models we examined before. Performance in predicting `SkillLevel` 1 is particularly weak.
+
+
+# Conclusion
+In this lab, we showed how to use `Linear Discriminant Analysis`, using the *caret* package's wrapper of the `LDA` implementation from the *MASS* package. We showed how `LDA` can be used for prediction. You can compare its results to other models in the previous labs. 
+
+<!-- # Appendix: R Markdown Instructions -->
+<!-- Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*. -->
+
+<!-- When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file). -->

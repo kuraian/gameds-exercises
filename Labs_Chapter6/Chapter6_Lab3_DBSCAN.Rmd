@@ -1,0 +1,172 @@
+---
+title: "Chapter 6 Lab 3 - Density-based Clustering"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Goal
+In this lab, we will show how DBSCAN (**D**ensity-**B**ased **S**patial **C**lustering and **A**pplication with **N**oise), a density-based clustering algorithm for cluster analysis, can be applied on the DoTalicious data set.
+
+We are using the package `dbscan`, which has one of the fastest implementation of DBSCAN in terms of running time. For reference on the package, see: https://cran.r-project.org/web/packages/dbscan/dbscan.pdf. 
+
+## Brief refresher
+`DBSCAN` works by scanning the data for regions with high density. Data points will be labeled as *core*, *border*, or *noise*, respectively based on whether they are: (1) well in the regions with high density, (2) on the border between high and low density regions, or (3) in low density regions.
+
+## Preparation
+
+We first install the package `dbscan`, then load the libraries needed for the lab.
+
+```{r}
+library(factoextra) # for visualization of results
+library(caret) # for feature scaling
+
+options(repos = c(CRAN = "http://cran.rstudio.com"))
+install.packages("dbscan", dependencies = TRUE)
+library(dbscan) # for DBSCAN
+
+options(repos = c(CRAN = "http://cran.rstudio.com"))
+install.packages("fpc", dependencies = TRUE)
+library(fpc) # for evaluation metrics
+
+```
+
+# Step 1: Load the data set 
+
+Load data and convert to appropriate data type, just like you did in Labs 6.1 and 6.2.
+
+```{r}
+
+# data
+Dota_data <- read.csv("DoTalicious_cleaned1000players.csv", fileEncoding="UTF-8-BOM")
+summary(Dota_data)
+
+# convert TotalTime
+Dota_data$TotalTime <- as.numeric(Dota_data$TotalTime)
+
+# exclude the row with SillLevel = SkillLevelNull
+Dota_data$SkillLevel <- as.factor(Dota_data$SkillLevel)
+Dota_data <- Dota_data[!(Dota_data$SkillLevel == " SkillLevelNull"),]
+
+# use factor in place of as.factor to remove " SkillLevelNull" from the list of factors
+Dota_data$SkillLevel <- factor(Dota_data$SkillLevel)
+
+# exclude PlayerID
+Dota_data <- Dota_data[-1]
+
+```
+
+Assign the `SkillLevel` to `row.names` for visualization later.
+
+```{r}
+# make the names of levels descriptive and assign them to row.names
+levels(Dota_data$SkillLevel) <- c("N", "B", "I", "A")
+row.names(Dota_data) <- make.names(Dota_data[,"SkillLevel"], unique = TRUE) 
+
+```
+
+Exclude the `SkillLevel` column, since it is not numeric. Our DBSCAN algorithm only works with numeric variables.
+
+```{r}
+
+attribs_except_skill <- -which(names(Dota_data) %in% c("SkillLevel"))
+DotaData_NoSkill <- Dota_data[, attribs_except_skill]
+
+```
+
+Finally, you will need to scale the data for this lab.
+
+```{r}
+preProcValues <- preProcess(x = DotaData_NoSkill,method = c("center", "scale"))
+DotaData_NoSkill <- predict(preProcValues, DotaData_NoSkill)
+```
+
+Check if there is any missing value (NA here means Not Available). If it returns *False*, we're good to go. If not, you will need to omit the rows with NAs in them. 
+
+```{r}
+anyNA(DotaData_NoSkill)
+DotaData_NoSkill = na.omit(DotaData_NoSkill)
+```
+
+# Step 2: Tune DBSCAN hyperparameters 
+
+As discussed in the Chapter, there are two hyperparameters to tune in `DBSCAN`.
+
+* `eps` (epsilon): the radius of a point's neighborhood to compute density. 
+* `minPts` (minimum points): the minimum number of neighbors within the neighborhoud for the point to be considered *core* (i.e., well in high-density areas).
+
+`kNNdistplot` is a function that plots the average distance between every point in the data set and a fixed number of nearest neighbors surrounding it. For example, the figure below shows the plot with the number of nearest neighbors set to `100`.
+
+By examining the plot, we can see the range of density values existing in the data. The `Elbow` principle can be applied here to select the `eps` value that lies at the transition point between gradual and drastic change in distance. The rationale is that on the left of that transition point are data points with high density, and on the right are those with low density. In the code, the `abline` function draws a line that cut across the plot to show where a specifc `eps` value is on the plot.  
+
+```{r}
+
+set.seed(2063)
+
+#setting the hyperparameters
+minPts <- 100 #100
+eps <- 7.5  #7.5
+
+#plotting average distance between each point, 
+kNNdistplot(DotaData_NoSkill, k = minPts)
+abline(h=eps, col = "red", lty=3) # 7.5 seems reasonable according to elbow method
+```
+
+We will then see if the cut point is close to the transition point, i.e., the `Elbow`, or not. If it is, we can select it.
+
+# Step 3: Run DBSCAN
+
+```{r}
+fit <- dbscan::dbscan(DotaData_NoSkill, eps = eps, minPts = minPts)
+fit # the output label 0 corresponds to noise
+```
+
+The output shows the membership assigned to the data.
+
+# Step 5: Visualize the result
+
+As the final step, the result should be visualized for the expert to scrutinize and decide if the results make sense. For this purpose, like the previous labs, we will use the package `factoextra`, which provides the function `fviz_cluster` capable of visualizing the results of many clustering algorithms. Check out the documentation [here](https://cran.r-project.org/web/packages/factoextra/factoextra.pdf)
+
+```{r echo=TRUE}
+fviz_cluster(fit, data = DotaData_NoSkill, stand = FALSE,
+             show.clust.cent = TRUE,
+             geom = "point",palette = "jco", ggtheme = theme_classic())
+```
+
+Re-visualize the clusters with our `SkillLevel` variable as labels.
+
+```{r echo=TRUE} 
+fviz_cluster(fit, data = DotaData_NoSkill, stand = FALSE,
+             show.clust.cent = TRUE,
+             geom = "text",palette = "jco", ggtheme = theme_classic())
+```
+
+The noise points are shown with large labels, so they are easy to spot. You can see that they are mainly points belonging to Advanced (A) or Beginner (B) class.
+
+The `fviz_silhouette` function, which visualizes Silhouette values, does not support DBSCAN, so we will just compute the average Silhouette width as a way to measure the result's quality.
+
+```{r}
+res <- fpc::cluster.stats(dist(DotaData_NoSkill), fit$cluster)
+```
+
+You get the above warning message because `DBSCAN` assigned all noise data points to Cluster 0, while indicating that there is only 1 cluster. It can be ignored.
+
+Average silhouette width
+```{r}
+res$avg.silwidth
+```
+
+The average Silhouette width is quite high. However, this metric is only useful if we have at least 2 meaningful clusters, so it may not make much sense here when we have only 1 cluster found (the other is just noise).
+
+Within Cluster Sum of Squares (WSS)
+```{r}
+res$within.cluster.ss
+```
+
+The smaller WSS is, the better the obtained clustering is. You can compare this value with the WSS of other algorithms, such as K-Means to see which one got a lower value. However, note that WSS biases algorithms that target spherical clusters, such as K-Means, and larger numbers of clusters. Keep that in mind when you use WSS to compare different algorithms.
+
+# Further Readings
+* [factoextra v1.0.5](https://www.rdocumentation.org/packages/factoextra/versions/1.0.5), by Alboukadel Kassambara, 2018
+
+# Conclusion
+In this lab, we showed you how to use `DBSCAN` for cluster analysis. Unfortunately, it looks like that this algorithm is not very suitable to the data we used here. Perhaps you can, as an exercise, try out the different data sets we used through the previous chapters, such as VPAL, PUBG or Dota2. And compare the results with other algorithms you used in previous labs. 

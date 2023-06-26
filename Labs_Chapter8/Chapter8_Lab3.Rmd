@@ -1,0 +1,96 @@
+---
+title: "Chapter 8 Lab 3 - Evaluation Metrics for Regression Models"
+output:
+  html_document:
+    df_print: paged
+---
+# Goal
+
+In this lab, we are going to show you how to evaluate regression models using the metrics discussed in Chapter 8. The regression model we are evaluating is `Linear Regression`, as discussed in Chapter 7 and its accompanying Lab 1. 
+
+## Brief Refresher
+
+Some popular evaluation metrics for regression include `Mean-squared error (MSE)`, `Mean-absolute error (MAE)`, and `R-squared (`R^2`)`. Sometimes, `MSE's` rooted version, i.e., `Root Mean-Squared Error (RMSE)`, is used instead.
+
+## About the library used: `caret`
+
+The `caret` package we have extensively used in the labs can compute the above mentioned metrics automatically.
+
+## Preparation: Load the data
+
+First, load libraries.
+```{r}
+options(repos = c(CRAN = "http://cran.rstudio.com"))
+install.packages("caret", dependencies = TRUE)
+library(caret)
+```
+
+Load and clean up data.
+```{r}
+# read the CSV file
+DotaData <- read.csv("DoTalicious_cleaned1000players.csv", fileEncoding="UTF-8-BOM")
+
+# convert TotalTime
+DotaData$TotalTime <- as.numeric(DotaData$TotalTime)
+
+# exclude the row with SillLevel = SkillLevelNull
+# DotaData$SkillLevel <- as.factor(DotaData$SkillLevel)
+DotaData <- DotaData[!(DotaData$SkillLevel == " SkillLevelNull"),]
+
+# use factor in place of as.factor to remove " SkillLevelNull" from the list of factors
+DotaData$SkillLevel <- factor(DotaData$SkillLevel)
+
+# convert SkillLevel into numeric values
+DotaData$SkillLevel <- as.numeric(DotaData$SkillLevel)
+
+# exclude PlayerID
+DotaData <- DotaData[-1]
+
+DotaData = na.omit(DotaData)
+
+summary(DotaData)
+```
+
+We converted `SkillLevel` into numeric values as well, which range from 1 (lowest level) to 4 (highest level).
+
+Next, set up training and testing set.
+
+```{r}
+# setting the random seed
+set.seed(1070)
+indxTrain <- createDataPartition(y = DotaData$Kills, p = 0.75,list = FALSE)
+training <- DotaData[indxTrain,]
+testing <- DotaData[-indxTrain,]
+```
+
+# Step 2: Build a regression model and evaluate its performance
+
+The linear regression model implemented in `caret` is invoked with method name `lm` (linear model) as discussed before. We indicated the model to predict the value of `Kills` from the rest.
+
+```{r}
+set.seed(26853)
+lm_fit <- train(Kills ~ ., data = training, method = "lm")
+lm_fit
+```
+
+The three performance values, i.e., `RMSE`, `Rsquared`, and `MAE`, shown above denote the resultant model's performance in the training data.
+
+Next, apply the model on the test data and compute `RMSE`, `MAE`, and `R^2`.
+
+```{r}
+lm_pred <- predict(lm_fit, testing)
+postResample(pred = lm_pred, obs = testing$Kills)
+```
+
+As observed above, the performance of the model on the test data is slightly worse than that on the training data, although it's still very good.
+
+Once you are happy with the model, a post-processing step can be performed to examine the coefficients of the model, stored in the slot `finalModel` of the object returned from the `train` function, i.e., `lm_fit`.
+
+```{r}
+summary(lm_fit$finalModel)
+```
+
+It is clear that `KillsPerMin` has the highest effect on the predicted `Kills` value.
+
+# Conclusion
+In this lab, we showed you how to use `caret` to train a `linear regression` model and compute regression metrics, such as `MSRE`, `Rsquared` and `MAE`.

@@ -1,0 +1,297 @@
+---
+title: "Chapter 6 Lab 4 - Hierarchical Clustering"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Goal
+In this lab, you will learn how to apply and use `Hierarchical Clustering (HC)` on a game dataset. 
+
+There are many different R imlementations of `HC`; we are going to use the following functions:
+
+* `hclust` from the built-in `stats` package (url: https://stat.ethz.ch/R-manual/R-devel/library/stats/html/00Index.html)
+* `agnes` and `diana` from the `cluster` package (url: https://cran.r-project.org/web/packages/cluster/cluster.pdf)
+
+Among these functions, `hclust` and `agnes` are agglomerative HC, and `diana` is divisive HC. For more about what agglomerative and divisive algorithms are, please review the Chapter. 
+
+## Brief refresher
+Unlike partitional methods, Hierarchical Clustering does not produce a single clustering result. Its output takes the form of a tree structure called *dendrogram* that represents how the data can be grouped based on their similarity. Users can select a within-cluster similarity value to cut the tree, which results in one specific clustering result. Therefore, there can be many clustering results one can deduce from one resultant tree.  
+
+## Preparation
+
+We first load the following packages (install if you need to).
+```{r}
+library(caret) # for feature scaling
+
+options(repos = c(CRAN = "http://cran.rstudio.com"))
+install.packages("tidyverse", dependencies = TRUE)
+library(tidyverse)  # data manipulation
+library(cluster)    # clustering algorithms
+library(factoextra) # clustering visualization
+library(dendextend) # for comparing two dendrograms
+```
+
+# Step 1: Load the data set 
+
+Load data and convert to appropriate data type.
+We will be using Dotalicious data here like in the previous labs, so make sure the directory structure is where you put the file, we assume the file is in the local directory. These steps are similar to previous labs. 
+```{r}
+
+# data
+Dota_Data <- read.csv("DoTalicious_cleaned1000players.csv", fileEncoding="UTF-8-BOM")
+summary(Dota_Data)
+
+# convert TotalTime
+Dota_Data$TotalTime <- as.numeric(Dota_Data$TotalTime)
+
+# exclude the row with SillLevel = SkillLevelNull
+Dota_Data$SkillLevel <- as.factor(Dota_Data$SkillLevel)
+Dota_Data <- Dota_Data[!(Dota_Data$SkillLevel == " SkillLevelNull"),]
+
+# use factor in place of as.factor to remove " SkillLevelNull" from the list of factors
+Dota_Data$SkillLevel <- factor(Dota_Data$SkillLevel)
+
+# exclude PlayerID
+Dota_Data <- Dota_Data[-1]
+
+```
+
+Similar to previous labs, we will assign the `SkillLevel` to `row.names` for visualization later.
+
+```{r}
+# make the names of levels descriptive and assign them to row.names
+levels(Dota_Data$SkillLevel) <- c("N", "B", "I", "A")
+row.names(Dota_Data) <- make.names(Dota_Data[,"SkillLevel"], unique = TRUE) 
+
+```
+
+Similar to previous labs, we will exclude the `SkillLevel` column, since it is not numeric. Hierarchical clustering algorithm only works with numeric variables.
+
+```{r}
+
+attribs_except_skill <- -which(names(Dota_Data) %in% c("SkillLevel"))
+DotaData_NoSkill <- Dota_Data[, attribs_except_skill]
+
+```
+
+Finally, as with previous labs, we will scale the data.
+```{r}
+preProcValues <- preProcess(x = DotaData_NoSkill,method = c("center", "scale"))
+DotaData_NoSkill <- predict(preProcValues, DotaData_NoSkill)
+```
+
+Check if there is any missing value (NA here means Not Available). If it returns *False*, we're good to go. If not, omit the rows with NA. 
+
+```{r}
+anyNA(DotaData_NoSkill)
+DotaData_NoSkill = na.omit(DotaData_NoSkill)
+```
+
+# Step 2: Apply the hierarchical clustering methods
+We are examining the hierarchical clustering methods as implemented in the `stats` (`hclust`) and `cluster` (`agnes` and `diana`) packages.
+
+1. HC implementation from `stats`
+We try with the `hclust` function from the `stats` library first.
+
+```{r}
+# Dissimilarity matrix
+dist_mtx <- dist(DotaData_NoSkill, method = "euclidean")
+
+# Hierarchical clustering using Complete Linkage
+hc1 <- hclust(dist_mtx, method = "complete" )
+
+# Plot the obtained dendrogram.
+plot(hc1, cex = 0.6, hang = -1)
+```
+
+Some notes:
+
+* `hclust` takes as input a distance matrix, so while we are using Euclidean distance here, you can try with other metrics, but will keep that as an exercise.
+* we are running `hclust` with complete-linkage here. Other options include `single`, `average`, `ward.D2`, etc. 
+* The last command in the above code plots the obtained dendrogram. Due to the large size of our data set, the plot is a bit hard to see. 
+
+Later, we can discuss how to evaluate the clustering result.
+
+2. HC implementations from `cluster`
+
+Alternatively, we can also use the function `agnes` from the `cluster` library for agglomerative HC.
+
+```{r}
+# Compute with agnes
+hc2 <- agnes(DotaData_NoSkill, method = "complete")
+```
+
+The output returned from `agnes` contains the agglomerative coefficient (AC), which represents the cluster tendency in the data. AC takes value between 0 and 1, with higher value indicating higher cluster tendency
+
+```{r}
+hc2$ac
+```
+
+At 0.984, the AC shows that the data has high cluster tendency, which is interesting. One thing worth noting is that AC grows with the number of data rows (i.e., observations), so if we have a large data set, AC can grow to be quite close to 1. See [here](https://stat.ethz.ch/R-manual/R-devel/library/cluster/html/coef.hclust.html) for how AC is computed.
+
+Given ACs, we can then compare different `agnes` methods, such as "average", "single", "complete", and "ward".
+
+```{r}
+
+##### assess different methods with agnes (average/complete/single/ward)
+# methods to assess
+m <- c( "average", "single", "complete", "ward")
+names(m) <- c( "average", "single", "complete", "ward")
+
+# function to compute coefficient
+ac <- function(x) {
+  agnes(DotaData_NoSkill, method = x)$ac
+}
+
+map_dbl(m, ac)
+```
+
+`map_dbl` is a utility function from `tidyverse` that simplifies "while"-loop. Here, we use it to compute ACs of all the aforementioned methods. It seems that "ward" is the best method here.
+
+Next, let's visualize the dendrogram of the best method "ward", using `pltree`. Note that `pltree` only works with outputs of `agnes` and `diana`, and not `hclust` from the `stats` package.
+
+```{r}
+##### visualize the dendrogram of ward method
+hc3 <- agnes(DotaData_NoSkill, method = "ward")
+pltree(hc3, cex = 0.6, hang = -1, main = "Dendrogram of agnes") 
+```
+
+
+Similarly, we can apply the above steps with `diana`, the divisive HC method.
+
+```{r}
+# compute divisive hierarchical clustering
+hc4 <- diana(DotaData_NoSkill)
+
+# Divise coefficient; amount of clustering structure found
+hc4$dc
+## [1] 0.9825621
+
+# plot dendrogram
+pltree(hc4, cex = 0.6, hang = -1, main = "Dendrogram of diana")
+```
+
+Note that `diana` does not allow the setting of any merging method, e.g. "complete", "single", or "average". 
+
+---
+**REMARKS**
+
+By examining the dendrogram, you can see that `diana` tends to produce large clusters, while `agnes` focuses more on small clusters. You should take into account this difference between `agnes` and `diana` when applying clustering. If you think there are many big clusters, then applying `diana` would be a better choice, and vice versa.
+
+---
+
+# Step 3: Cut the tree to obtain clustering
+
+After running HC algorithms, we obtain a dendrogram representing the hierarchy of data partitions. Next, we will cut the tree to obtain concrete clusterings. This way we can make sense of the data, as you can see from all the outputs of the different HC methods above, there are many clusters from the data point. So we need to inspect at the right level by cutting the tree at the optimal cluster level. 
+
+1. Obtaining the optimal cut point
+
+Before cutting the tree, we need to determine which cutting is most optimal. Here, we will apply the Elbow method again, by examining the WSS (Within-cluster Sum of Squares) plot with respect to varying numbers of clusters K.
+
+```{r}
+# plot using WSS metric
+fviz_nbclust(DotaData_NoSkill, FUN = hcut, method = "wss", k.max = 30)
+# the plot is quite smooth, so it's not easy, but 5 to 8 seems reasonable
+```
+
+Following the `Elbow` method,  the best K seems to be `5` in this case.
+
+Alternatively, we can draw a similar plot with the y-axis being average silhouette width.
+
+```{r}
+# plot using average silhouette width
+fviz_nbclust(DotaData_NoSkill, FUN = hcut, method = "silhouette", k.max = 30)
+```
+
+Unlike the previous plot, in this plot, the goal is to select K with the highest average width. `K=2` is the highest, 3 is the 2nd highest, but `5` is interestingly better than `4`.
+
+The consensus here points to `K=5` as a reasonably optimal choice.
+
+2. Cut the `hclust` tree
+
+Let's try with the dendrogram from `hclust` first, with number of clusters `K` set to 5.
+
+```{r}
+# Ward's method in hclust : dist_mtx is the distance matrix
+hc5 <- hclust(dist_mtx, method = "ward.D2" )
+
+# Cut tree into K groups
+num_clus <- 5
+sub_grp <- cutree(hc5, k = num_clus)
+
+# Number of members in each cluster
+table(sub_grp)
+```
+To identify what data point belongs to which cluster we can inspect `sub_grp` variable. 
+
+```{r}
+sub_grp
+```
+
+
+The function `cutree` takes as input the desired number of clusters. The output shows the size of the 5 clusters. It's interesting to see that there are many small clusters, such as Cluster 4 and 5. It's very likely that these clusters are noise/outliers in the data.
+
+We can also visualize the clusters by boxing the dendrogram.
+
+```{r echo=TRUE}
+##### draw dendrogram with borders
+plot(hc5, cex = 0.6)
+rect.hclust(hc5, k = num_clus, border = 2:5)
+
+```
+
+Cluster 2 contains a big part of the data.
+
+You can pull up the help page of `rect.hclust`, by typing `?rect.hclust` in the console, for more information on how to tweak the plot.
+
+# Step 4: Visualization of the Clusters
+
+Alternatively, you can use `fviz_cluster` from the `factoextra` library to visualize the clusters, as you did before. 
+
+We here visualize the clusters formed by Hclust.
+
+```{r}
+#### visualize the clusters using fviz_cluster for hclust
+fviz_cluster(list(data = DotaData_NoSkill, cluster = sub_grp),
+             show.clust.cent = FALSE)
+```
+
+It is clear that Cluster 5 contains the sole outlier we observed before. This demonstrates a strength of HC: it can detect outliers/noise well.
+
+We can do the same with `agnes` and `diana` trees, by converting them into `hclust` objects.
+
+```{r}
+# Cut agnes() tree
+hc_a <- agnes(DotaData_NoSkill, method = "ward")
+sub_grp_a <- cutree(as.hclust(hc_a), k = num_clus)
+table(sub_grp_a)
+```
+
+Visualize clusters for the Agnes tree. 
+
+```{r}
+fviz_cluster(list(data = DotaData_NoSkill, cluster = sub_grp_a),
+             show.clust.cent = FALSE)
+```
+
+We visualize this time with the `diana` function
+
+```{r}
+# Cut diana() tree
+hc_d <- diana(DotaData_NoSkill)
+sub_grp_d <- cutree(as.hclust(hc_d), k = num_clus)
+table(sub_grp_d)
+```
+
+Visualize clusters for the Diana tree. 
+
+```{r}
+fviz_cluster(list(data = DotaData_NoSkill, cluster = sub_grp_d),
+             show.clust.cent = FALSE)
+```
+
+Observing the visualization, we can see that while the clusterings by `hclust` and `agnes` are the same, those of `diana` are different: the biggest cluster is now bigger, and the rest are smaller. This is the effect of `diana` emphasizing more on big clusters. It is important to note that as discussed above `hclust` and `agnes` are both agglomerative hierarchical clustering methods while `diana` is a divisive hierarchical clustering method.  
+
+# Conclusion
+In this lab, we showed you how to use Hierarchical Clustering for cluster analysis. We acknowledge the visualization issues with visualizing the dendogram of the clusters due to the density of the data points used. You may want to repeat with a subset of the data to see how clustering actually works. Or you can use the membership to the clusters to look through your data to see if the clusters make qualitative sense. We usually use a mix of quantiative and qualitative analysis with clustering to make sense of the results. 

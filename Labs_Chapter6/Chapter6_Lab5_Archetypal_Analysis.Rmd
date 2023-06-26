@@ -1,0 +1,157 @@
+---
+title: "Chapter 6 Lab 5 - Archetypal Analysis (AA)"
+output:
+  html_document:
+    df_print: paged
+
+---
+
+# Goal
+In this lab, we will show you how to use `Archetypal Analysis (AA)` to obtain archetypes from the data.
+
+We will use the AA implementation from the "archetypes" package. See url: https://cran.r-project.org/web/packages/archetypes/archetypes.pdf for more information on the package. 
+
+## Preparation
+
+Load the following packages (install if you need to). This is similar to the previous labs, except we are now loading and will be using archetypes package. 
+
+```{r}
+
+options(repos = c(CRAN = "http://cran.rstudio.com"))
+install.packages("archetypes", dependencies = TRUE)
+library(archetypes) # for archetypal analysis
+library(caret) # for preprocessing the data
+```
+
+# Step 1: Load the data set 
+
+Similar to previous labs, load data and convert to appropriate data type.
+
+```{r}
+
+# data
+Dota_Data <- read.csv("DoTalicious_cleaned1000players.csv", fileEncoding="UTF-8-BOM")
+summary(Dota_Data)
+
+# convert TotalTime
+Dota_Data$TotalTime <- as.numeric(Dota_Data$TotalTime)
+
+# exclude the row with SillLevel = SkillLevelNull
+Dota_Data$SkillLevel <- as.factor(Dota_Data$SkillLevel)
+Dota_Data <- Dota_Data[!(Dota_Data$SkillLevel == " SkillLevelNull"),]
+
+# use factor in place of as.factor to remove " SkillLevelNull" from the list of factors
+Dota_Data$SkillLevel <- factor(Dota_Data$SkillLevel)
+
+# exclude PlayerID
+Dota_Data <- Dota_Data[-1]
+
+```
+
+Similar to previous labs, assign the `SkillLevel` to `row.names` for visualization later.
+
+```{r}
+# make the names of levels descriptive and assign them to row.names
+levels(Dota_Data$SkillLevel) <- c("N", "B", "I", "A")
+row.names(Dota_Data) <- make.names(Dota_Data[,"SkillLevel"], unique = TRUE) 
+
+```
+
+Similar to previous labs, exclude the `SkillLevel` column, since it is not numeric. Archetypcal clustering algorithm only works with numeric variables.
+
+```{r}
+
+attribs_except_skill <- -which(names(Dota_Data) %in% c("SkillLevel"))
+DotaData_NoSkill <- Dota_Data[, attribs_except_skill]
+
+```
+
+Finally, similar to previous labs, scale the data. 
+```{r}
+preProcValues <- preProcess(x = DotaData_NoSkill,method = c("center", "scale"))
+DotaData_NoSkill <- predict(preProcValues, DotaData_NoSkill)
+```
+
+Check if there are any missing values (NA here means Not Available). If it returns *False*, we're good to go. We will leave out the rows with NAs, if they exist. 
+```{r}
+anyNA(DotaData_NoSkill)
+DotaData_NoSkill = na.omit(DotaData_NoSkill)
+```
+
+# Step 2: Apply the Archetypal Analysis
+
+We use the `stepArchetypes` function from the `archetypes` library. This function runs AA multiple times with different values of `K`, the number of archetypes.
+
+```{r}
+set.seed(2063)
+
+# run archetypal analysis multiple times with different K, in this line we are considering values of 1-10 for K. 
+ArchetypesForDota <- stepArchetypes(data = DotaData_NoSkill, k = 1:10, verbose = FALSE, nrep = 4)
+```
+
+We tried 10 different values of `K`, from 1 to 10, and repeated the `AA` algorithm 4 times per `K`. Since solving for archetypes is stochastic, it can converge to suboptimal solutions, thus repeating it multiple times of `K` helps ensure that we do not get stuck in local optima.
+
+If you see some warnings, those indicate that the matrices were singular, which can be caused by some unfavorable random initializations, and can be ignored.
+
+Next, the `screeplot` function shows the plot of RSS (Residual Sum of Squares) scores w.r.t different numbers of archetypes. The lower the RSS score is, the better the model is.
+
+```{r}
+screeplot(ArchetypesForDota)
+```
+
+In this case, 9 can be the optimal number of archetypes. However, you would also want to set a small number of archetypes. As such, the Elbow method can be applied here, suggesting `K=6` as a reasonable number of archetypes as well. 
+
+To obtain the resultant archetypes with respect to different `K` values, we use the `bestModel` function. For example, the following shows information related to the model at `K=10`.
+
+```{r}
+
+num_archs <- 10
+BestArchetypeModelForDota <- bestModel(ArchetypesForDota[[num_archs]])
+BestArchetypeModelForDota
+```
+
+And this shows that the Archetypes obtained with `K=10`.
+
+```{r}
+BestArchetypeModelForDota$archetypes
+```
+
+Let's take a look at the data by raw and their alpha coefficients given Archetype. This will help us establish which Archetype each data point belongs to.
+
+```{r}
+BestArchetypeModelForDota$alphas
+```
+
+
+# Step 3: Visualization
+
+Archetypes are different from clusters in the traditional sense, and more similar to principle components in PCA.
+
+One way to visualize archetypes is by using `simplexplot`.
+
+```{r}
+
+simplexplot(bestModel(ArchetypesForDota[[num_archs]]))
+
+```
+
+In the plot, the archetypes are shown on the perimeter of a simplex, named as `A_1` to `A_K` (K=10 in this case), containing the data points. The distances between each data point to the archetypes represent the "closeness" it is to the archetypes.
+
+Let's try with a smaller K, such as 6.
+
+```{r}
+
+simplexplot(bestModel(ArchetypesForDota[[6]]))
+```
+
+
+---
+**REMARKS**
+
+Similar to the case with Model-based clustering, AA cannot be compared with other traditional clustering algorithms, since its goal, thus the objective function it is optimizing, is different. 
+
+---
+
+
+# Conclusion
+In this lab, we showed you how to use Archetypal analysis to extract archetypes from a data set. This type of algorithm is very different from others, so you can compare the results qualitatively to other algorithms and see what results in better qualitative clusters.  

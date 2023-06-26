@@ -1,0 +1,37 @@
+---
+title: "Chapter10_Lab2"
+output:
+  html_document:
+    df_print: paged
+---
+# Goal
+
+In this lab we will apply the `SPADE` algorithm discussed in the Chapter on the dataset we introduced in the last labs. For the purposes of clarity and demonstration, we will use a small subset of the data containing only 50 sequences (or sessions). 
+
+The first step is for us to load the right libraries to use the package. To use `SPADE` algorithm we will use the `arulesSequences` package/library.  
+
+```{r}
+options(repos = c(CRAN = "http://cran.rstudio.com"))
+install.packages("arulesSequences", dependencies = TRUE)
+library(arulesSequences)
+```
+
+Once the library is loaded we will then load up the data. 
+We prepared a text file, called testSpade.txt with the data transformed to the format used by `SPADE` in this package. Basically the algorithm expects to have a `SequenceID` and `EventID`, where `EventID` holds the timestep of the state or event in the sequence as described in the chapter. Notice we are using labels: sequenceID and eventID for that. This is important as the `SPADE` algorithm expects the information with these labels.  
+
+```{r}
+playerData.spade <- read_baskets(con  = "action_sequence_seg_lab2.txt", sep = " ", info = c("sequenceID","eventID"))
+as(playerData.spade, "data.frame")
+```
+
+Once we have loaded up the data in the format needed by `SPADE` algorithm, we can then run the `SPADE` algorithm on the data. 
+
+```{r}
+playerData.spadeoutput <- cspade(playerData.spade, parameter = list(support = .5), control = list(verbose = TRUE))
+summary(playerData.spadeoutput)
+as(playerData.spadeoutput, "data.frame")
+```
+
+As discussed in the Chapter, the algorithm will find the sequences with the `min support` given in this case = `0.5`.  As you can see, teaming and solo combinations dominate these patterns. 
+
+In conclusion, we showed how to apply the `SPADE` algorithm on the data using the `arulesSequences` package. Please note the format of the input data. As an exercise, you can start playing with other datasets like VPAL and Dota to see if you can get more of an idea of dominate players' sequences or strategies using this algorithm. 

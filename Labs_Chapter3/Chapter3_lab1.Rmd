@@ -1,0 +1,132 @@
+---
+title: "Chapter3_Lab1"
+output:
+  html_document:
+    df_print: paged
+---
+# Goal
+In this Lab we will be working with the VPAL data a bit more to look at distribution for some of the variables in the dataset. We will also conduct some descriptive analysis. 
+
+## Computing Centrality of the Data
+
+First, we will load up the data from the file "VPALDataParsed", which is an already parsed data file that we created. You can also use your own file. 
+```{r}
+#read the table from the parsed file 
+VPALData <- read.table("VPALDataParsed.csv", header=TRUE, sep=",")
+
+VPALData
+```
+
+We will look at the <i>Quest.Completed</i> variable and plot its histogram and then measure it's mean, median, and mode. We are using several statments to run a line to fit a curve to show where it deviates from a normal distribution.
+
+```{r}
+#histogram with a fitted curve to show how skewed the distribution is or if it is normally distributed.
+h<-hist(VPALData$Quest.Completed, breaks=10, col="purple", xlab="Kills", 
+  	main="Histogram with Normal Curve") 
+xfit<-seq(min(VPALData$Quest.Completed),max(VPALData$Quest.Completed),length=40) 
+yfit<-dnorm(xfit,mean=mean(VPALData$Quest.Completed),sd=sd(VPALData$Quest.Completed)) 
+yfit <- yfit*diff(h$mids[1:2])*length(VPALData$Quest.Completed) 
+lines(xfit, yfit, col="black", lwd=2)
+
+#calculcating the mean, median and mode
+mean(VPALData$Quest.Completed)
+median(VPALData$Quest.Completed)
+getmode <- function(v) {
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+getmode(VPALData$Quest.Completed)
+```
+
+As you can see, this variable is almost normally distributed so the mean, median and mode should be similar. If we look at a more skewed example, like the <i>Kills</i> variable, the mean, median and mode are very different. 
+```{r}
+h<-hist(VPALData$Kills, breaks=10, col="purple", xlab="Kills", 
+  	main="Histogram with Normal Curve") 
+xfit<-seq(min(VPALData$Kills),max(VPALData$Kills),length=40) 
+yfit<-dnorm(xfit,mean=mean(VPALData$Kills),sd=sd(VPALData$Kills)) 
+yfit <- yfit*diff(h$mids[1:2])*length(VPALData$Kills) 
+lines(xfit, yfit, col="black", lwd=2)
+
+# This is calculated on the data as is and before the conversion to normal distribution to show how the mean, median, mode calculcation will look like for a skewed distribution.
+mean(VPALData$Kills)
+median(VPALData$Kills)
+getmode <- function(v) {
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+getmode(VPALData$Kills)
+
+
+```
+## Transforming <i>Kills</i> into Normal Distributed Data
+
+As discussed in the book, it is recommended that you transform the data to a normal distribution to allow for many statistical techniques to be applied. The histogram for <i>Kills<i> above looks like it comes from an exponential distribution, but since we want the data to be normally distributed to be able to handle it with the algorithms shown in the chapter, then a transformation is needed to be done for it to be used.
+We, thus, transformed the <i>Kills</i> variable using the "Square"" transfomration, which is recommended for left skewed distributions. To do that we are using the rcompanion R library, for more information on that, please consult the manual at: https://cran.r-project.org/web/packages/rcompanion/rcompanion.pdf
+
+```{r}
+#need to transform this distribution into a normal distribution first
+options(repos = c(CRAN = "http://cran.rstudio.com"))
+install.packages("rcompanion")
+VPALData$Kills = sqrt(VPALData$Kills)
+
+#plotting the histogram again to see how the data has been transformed
+h<-hist(VPALData$Kills, breaks=10, col="purple", xlab="Kills", 
+  	main="Histogram with Normal Curve") 
+xfit<-seq(min(VPALData$Kills),max(VPALData$Kills),length=40) 
+yfit<-dnorm(xfit,mean=mean(VPALData$Kills),sd=sd(VPALData$Kills)) 
+yfit <- yfit*diff(h$mids[1:2])*length(VPALData$Kills) 
+lines(xfit, yfit, col="black", lwd=2)
+```
+
+## Computing Spread of the Data 
+
+We can calculating the  spread within the data using both variance and standard deviation functions in R. 
+```{r}
+range(VPALData$Kills)
+range(VPALData$Quest.Completed)
+
+#calculating variance and standard deviation of Kills
+var(VPALData$Kills)
+sd (VPALData$Kills)
+
+#calculating variance and standard deviation of Quests Completed
+var(VPALData$Quest.Completed)
+sd (VPALData$Quest.Completed)
+
+```
+
+## Correlation Analysis
+
+We can perform some correlation analysis between two variables. First, we can plot one variable against the other and see if we can fit a line to explain the data. We are using ggplot2 R library to do that, please consult the library reference at: https://cran.r-project.org/web/packages/ggplot2/ggplot2.pdf.
+
+By using the <i>cor</i> function in R, we can compute the correlation between two variables. In this case, we are computing the correlation between <i>Kills</i> and <i>Shots</i> using Spearman correlation analysis method. 
+```{r}
+
+library(ggplot2)
+ #plotting the two variables to understand how they are related
+  qplot(VPALData$Kills, 
+      VPALData$Shots, 
+      data = VPALData, 
+      geom = c("point", "smooth"), 
+      method = "lm", 
+      alpha = I(1 / 5), 
+      se = FALSE)
+  
+#correlation between the two variables 
+  cor(VPALData$Shots, VPALData$Kills, method = "spearman")
+```
+
+We can then calculcate correlations between all variables using <i>rcorr</i> function from the <i>Hmisc</i> Library in R; for a library reference see: https://cran.r-project.org/web/packages/Hmisc/Hmisc.pdf.
+
+```{r}
+
+library(Hmisc)
+#The Data
+VPALData[,2:16]
+
+#comput the spearman correlation then output that correlation and the p values. 
+correlation <- rcorr(as.matrix(VPALData[,2:16]), type = "spearman")
+correlation
+```
+
+In conclusion, we have shown through this lab how to look at the distribution and transform variables into normally distributed data. We also showed how to perform correlation analysis. 

@@ -1,0 +1,73 @@
+---
+title: "Chapter2_lab3"
+output:
+  html_document:
+    df_print: paged
+---
+#Goal
+
+As part of data processing, we need to check the types of data upon import or after. The goal of this lab is to show you how we can do simple type checks using R functions. 
+
+#Checking for a Numeric
+
+In R, there are functions called <i>as.numeric</i> or <i>as.integer</i>, which in essence do just that. They check if the variable or values given to them as parameters are numeric or integers. 
+Here is an example where we used as.numeric on a vector of numbers, where we purposefully put in one element that is not a number: <i> 20*</i>.
+
+```{r}
+listOfNumbers <- as.numeric(c("10","10","20*", "20"))
+```
+
+As you can see, the result says "Warning: NA is introduced." This means that R found a non-number and introduced an NA in it. So as you can see when we check the value of the <i>listOfNumbers</i>, we get:
+```{r}
+listOfNumbers
+```
+
+With dataframes things are bit more complicated. Dataframes will store characters as factors by default, and thus the column will need to be turned into a character then into a numberic. That is due to the fact that factors are stored as numbers, and thus doing <i>as.numeric</i> on a factor will just convert it to the index number for that factor. Let's take the following example. We create a dataframe called <i> listPlayers</i> as we did in lab 1. We introduce a score that is purposefully a non-numeric: <i> 20*</i>. Then use the <i>as.numeric</i> function as before. Here is what we get:  
+```{r}
+listPlayers <- data.frame(names= c("Tammy", "John", "Katherine", "Tom"), score= c("10","10","20*", "20"))
+listPlayers$score <- as.numeric(listPlayers$score)
+listPlayers
+```
+
+What happened here is that R converted the score variable to a factor and then used the number for that factor. Factors are like "Enum"" in other programming langauges they will take the value of the factor, thus, 10 is 1, 20 is 2, and 20* is 3. 
+
+To do what we wanted to do to start with, we should convert the factor into a character first and then do <i> as.numeric </i>on it, as follows:
+```{r}
+listPlayers <- data.frame(names= c("Tammy", "John", "Katherine", "Tom"), score= c("10","10","20*", "20"))
+listPlayers$score <- as.character(listPlayers$score)
+listPlayers$score <- as.numeric(listPlayers$score)
+listPlayers
+```
+
+#Checking categories for Factors
+
+For factors, we can restrict the different types that you can read in. For example, let's say we have a variable called <i>heroType</i> that contains some hero types, and you want to make sure that you can restrict it to only: fighers, scout and mage. In this case, you do the following:
+```{r}
+heroType <- c("fighter", "scout", "fighter", "mage", "mage", "xx", "scout")
+heroType <- factor (heroType, levels=c("fighter", "scout", "mage"))
+heroType
+```
+
+As you can see, the result will be the new vector with the factors within the restricted type, anything that is not, like "xx" will be then given an NA. 
+
+#Dealing with Time Stamps
+
+Most games use time stamp in the format of POSIXct. This is formated as such:
+```{r}
+Sys.time()
+```
+
+When reading a text file, you may want to convert the time stamp into a POSIXlt
+```{r}
+timeStamp <- strptime("2017-02-25 05:10:10", "%Y-%m-%d %H:%M:%S")
+as.POSIXlt(timeStamp)
+
+```
+
+You can also check the time stamp by conversion, if it is not of the standard format, it will give you back an NA, as such:
+```{r}
+timeStamp1 <- strptime("2017-02-25 05::10", "%Y-%m-%d %H:%M:%S")
+as.POSIXlt(timeStamp1)
+```
+
+You can also do other operations on timestamps, such as subtract some time, add some time, or compare times. We will leave these for you as an exercise. 

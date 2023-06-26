@@ -1,0 +1,167 @@
+---
+title: "Chapter 8 Lab 2 - Classification Model Evaluation using AUC"
+output:
+  html_document:
+    df_print: paged
+---
+# Goal
+
+In this lab, we will show how to plot the `ROC curve` and compute the respective `AUC` value to depict a `Naive Bayes` model's performance. For illustrative purposes, we consider the `Naive Bayes` model, but you can use other models, such as `Logistic Regression`, for this purpose as well.
+
+We will again consider the task of predicting players' `SkillLevel`. 
+
+## Brief Refresher
+
+`AUC` stands for `Area Under the ROC Curve`, which is a curve depicting the relationship between a model's `sensitivity`, or *True Positive Rate* (TPR)) and `1-specificity`, or *False Positive Rate* (FPR)). For definitions of TPR and FPR, please refer to Chapter 8, and Lab 1.
+
+`AUC` takes value between 0 and 1, with 1 being good and 0 bad. To compute `AUC`, we need to first plot the `ROC Curve`.
+
+## About the library used: ROCR
+
+The library `ROCR` helps compute various performance metrics, using the function `performance`. We are going to compute the `TPR` and `FPR` values using this function.
+
+## Preparation: Load the data
+
+First, load libraries.
+```{r}
+# install package pROC to plot the ROC curve: only run once
+options(repos = c(CRAN = "http://cran.rstudio.com"))
+install.packages("caret", dependencies = TRUE)
+install.packages("ROCR", dependencies = TRUE)
+install.packages("klaR", dependencies = TRUE)
+library(ROCR)
+library(klaR)
+library(caret)
+```
+
+We will use the library `klaR` for the `Naive Bayes` classifier, and `caret` for processing the data.
+
+Load and clean up the data.
+```{r}
+# read the CSV file
+DotaData <- read.csv("DoTalicious_cleaned1000players.csv", fileEncoding="UTF-8-BOM")
+
+# convert TotalTime
+DotaData$TotalTime <- as.numeric(DotaData$TotalTime)
+
+# exclude the row with SillLevel = SkillLevelNull
+DotaData$SkillLevel <- as.factor(DotaData$SkillLevel)
+DotaData <- DotaData[!(DotaData$SkillLevel == " SkillLevelNull"),]
+
+# use factor in place of as.factor to remove " SkillLevelNull" from the list of factors
+DotaData$SkillLevel <- factor(DotaData$SkillLevel)
+
+# make the names of levels descriptive
+levels(DotaData$SkillLevel) <- c("Novice", "Beginner", "Intermediate", "Advanced")
+
+# exclude PlayerID
+DotaData <- DotaData[-1]
+
+DotaData = na.omit(DotaData)
+
+summary(DotaData)
+```
+
+One thing we did differently before is to rename the values of *SkillLevel*. Some R libraries have problems with levels' names taking on numeric values, e.g., "0", "1", "2", etc. as we have with `SkillLevel`. Renaming them to letters can help avoid such issues.
+
+Next, set up training and test set.
+
+```{r}
+# setting the random seed
+set.seed(102)
+#Spliting data as training and test set. Using createDataPartition() function from caret
+indxTrain <- createDataPartition(y = DotaData$SkillLevel,p = 0.75,list = FALSE)
+training <- DotaData[indxTrain,]
+testing <- DotaData[-indxTrain,]
+```
+
+# Step 2: Compute AUC
+
+As you learned in Chapter 8, `ROC Curve` and `AUC` are defined based on binary classification, which means that they are not directly applicable to multi-class classification tasks, such as predicting `SkillLevel` (having 4 values) here. As such, we are going to transform our task into 4 classification sub-tasks, taking the [One-versus-Rest approach](https://en.wikipedia.org/wiki/Multiclass_classification#One-vs.-rest). The idea is to draw four separate `ROC curves`, each representing the ability of one `Naive Bayes` model, trained on the training data, in distinguishing one class (such as "Novice", or "Beginner", etc.) from the remaining three classes. We, therefore, would also obtain four `AUC` values corresponding to the four ROC Curves.
+
+## Implementation
+
+Set up `aucs` as a vector to store the AUC values.
+```{r}
+aucs = c()
+```
+
+
+This is the main plotting and computation step.
+```{r, warning=FALSE}
+# Set up the plot
+plot(x=NA, y=NA, xlim=c(0,1), ylim=c(0,1),
+     ylab='True Positive Rate',
+     xlab='False Positive Rate',
+     bty='n')
+
+# Get the values of SkillLevel
+lvls <- levels(DotaData$SkillLevel)
+
+# Get the list of column names excluding SkillLevel
+col_names <- -which(names(training) %in% c("SkillLevel"))
+
+# For each SkillLevel value
+for (skillLevel_id in 1:4) {
+  
+  # Transform the SkillLevel column into a new column taking value True/False
+  # True if the SkillLevel in that row is the same as the SkillLevel in consideration, and False otherwise.
+  # This is the One-versus-Rest approach
+  skillLevel <- as.factor(training$SkillLevel == lvls[skillLevel_id])
+  
+  # Build a NaiveBayes model based on this new data 
+  nb_model <- NaiveBayes(skillLevel ~ ., data = training[,col_names])
+  
+  # Obtain prediction on the test set
+  nb_predictions <- predict(nb_model, testing[,col_names], type='raw')
+  
+  # Compute
+  score <- nb_predictions$posterior[, 'TRUE']
+  ground_truth <- testing$SkillLevel == lvls[skillLevel_id]
+  
+  # Use the prediction and performance functions to get TPR and FPR
+  pred <- prediction(score, ground_truth)
+  nb_perf <- performance(pred, "tpr", "fpr")
+  
+  # Obtain x (FPR) and y (TPR) values to be used for drawing the ROC curve
+  roc_x_values <- unlist(nb_perf@x.values)
+  roc_y_values <- unlist(nb_perf@y.values)
+  
+  # Draw the curve
+  lines(roc_y_values ~ roc_x_values, col=skillLevel_id+1, lwd=3)
+  
+  # Use performance function again to obtain AUC
+  nb_auc <- performance(pred, "auc")
+  nb_auc <- unlist(nb_auc@y.values)
+  aucs[skillLevel_id] <- nb_auc
+}
+
+# some post processing
+# Add a legend
+legend(0.7, 0.3, legend=levels(DotaData$SkillLevel),
+       col=(1:4)+1, lty = 1, lwd = 3, cex=0.8)
+
+# Draw the baseline
+lines(x=c(0,1), c(0,1))
+
+```
+
+Please refer to the comments for explanation of each statements. Some additional notes:
+
+* In the `predict` function, `type` is set to "raw" to indicate that we would like the model to compute class probabilities instead of actual class values. 
+* `nb_perf` is an object, so we need to use `@` to access the values. More information on how OO works in R, please refer to:  http://adv-r.had.co.nz/OO-essentials.html
+* `unlist` transforms a list structure into a vector, which is needed to draw the line.
+* If there is anything unclear about any specific function, such as `prediction` by the `ROCR` library, type `?<function_name>` for more information, e.g., `?prediction`.
+* Also, notice that there are more steps for noice and beginner than for intermediate and advanced. This is because we have a lot more data for noice and beginners than the other two and so due to density, you will see such variation. 
+
+Display `AUC` values and the mean `AUC` value.
+```{r}
+aucs
+mean(aucs)
+```
+
+It appears that the `Naive Bayes` model works pretty well with the One-versus-Rest approach, yielding an average `AUC` of 92.47\%.
+
+
+# Conclusion
+In this lab, we showed you how to draw the `ROC curve` as well as computing `AUC` values for a `Naive Bayes` model, using the `ROCR` package. You can replicate that for other models that you learned through Chapter 7 labs. 

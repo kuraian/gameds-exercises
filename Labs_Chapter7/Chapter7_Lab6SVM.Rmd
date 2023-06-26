@@ -1,0 +1,136 @@
+---
+title: "Chapter 7 Lab 6 - Support Vector Machine (SVM)"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Goal
+In this lab, we, again, will try to predict players' skill level, i.e., column `SkillLevel`, which takes integer value between 0 and 3, with 0 being novice level and 3 expert. We will use the `Support Vector Machine` (SVM) implementation from the package `kernlab`, which is wrapped by the `caret` package.
+
+The `kernlab` package implements various kernel methods, including vanilla `SVM` (i.e., SVM with linear kernel) and `SVM` with other popular kernels (e.g., Radial Basis Function, Polynomial, Exponential String, etc.).
+
+## Brief refresher
+`SVM`, similar to `LDA`, is a method that uses vector space projection to find the best linear decision hyperplanes that separate the classes.
+
+## Preparation
+
+```{r}
+options(repos = c(CRAN = "http://cran.rstudio.com"))
+install.packages("kernlab", dependencies = TRUE)
+install.packages("caret", dependencies = TRUE)
+library("kernlab")
+library("caret")
+```
+
+# Step 1: Load the data set 
+
+```{r}
+# (optional) set working directory
+
+# read the CSV file
+DotaData <- read.csv("DoTalicious_cleaned1000players.csv", fileEncoding="UTF-8-BOM")
+summary(DotaData)
+```
+
+Clean up and set the correct data type.
+
+```{r}
+# convert TotalTime
+DotaData$TotalTime <- as.numeric(DotaData$TotalTime)
+
+# exclude the row with SillLevel = SkillLevelNull
+DotaData$SkillLevel <- as.factor(DotaData$SkillLevel)
+DotaData <- DotaData[!(DotaData$SkillLevel == " SkillLevelNull"),]
+
+# use factor in place of as.factor to remove " SkillLevelNull" from the list of factors
+DotaData$SkillLevel <- factor(DotaData$SkillLevel)
+
+# exclude PlayerID
+DotaData <- DotaData[-1]
+
+DotaData = na.omit(DotaData)
+
+summary(DotaData)
+```
+
+Check if there is any missing value (NA here means Not Available). If it returns *False*, we're good to go. Similar to previous labs, if there are any NAs, we can remove them through the `omit` function. 
+
+```{r}
+anyNA(DotaData)
+```
+
+# Step 2: Set up training and test set
+
+```{r}
+# setting the random seed
+set.seed(101)
+#Spliting data as training and test set. Using createDataPartition() function from caret
+indxTrain <- createDataPartition(y = DotaData$SkillLevel,p = 0.75,list = FALSE)
+training <- DotaData[indxTrain,]
+testing <- DotaData[-indxTrain,]
+summary(training)
+summary(testing)
+```
+
+## Data Standardization
+
+Variable standardization/normalization will be important when we use linear kernels, as variables would be combined in a linear fashion. So we are going to standardize the data as follows.
+
+```{r}
+preProcValues <- preProcess(x = training,method = c("center", "scale"))
+preProcValues
+```
+
+Apply preprocessing on both training and test data.
+```{r}
+# transform the training data using preProcValues
+trainTransformed <- predict(preProcValues, training)
+summary(trainTransformed)
+
+# Apply the same processing, using preprocessing information from the training data, onto the test data
+testTransformed <- predict(preProcValues, testing)
+summary(testTransformed)
+```
+
+
+# Step 3: Apply the SVM model
+
+Now, we are applying the `SVM` model on the data to predict class values for the `testing` data.
+
+## Train
+
+Use the same `train` function, but change the method to *svmLinear* instead.
+
+```{r}
+
+set.seed(101)
+ctrl <- trainControl(method="repeatedcv", number = 10, repeats = 3)
+linear_svm_model <- train(SkillLevel ~ ., data = trainTransformed, method = "svmLinear", trControl = ctrl, tuneLength = 20)
+```
+
+Now let's look at the model. 
+
+```{r}
+linear_svm_model
+```
+No tuning was necessary. The training accuracy appears to be quite high.
+
+The `C` parameter, when set to be high, will prioritize getting high accuracy, rather than high margin. Note that high margin usually leads to better generalization, while low margin means that the class separation may be too specific to the training data (i.e., *overfitting*). We just use the default value in this case, as it's unclear which value will be better, especially when the training accuracy is not perfect (i.e., 100\%) yet.
+
+## Predict
+
+```{r}
+predicted <- predict(linear_svm_model, newdata = testTransformed)
+confusionMatrix(predicted, testTransformed$SkillLevel )
+```
+
+The performance, as observed from overall accuracy and the confusion matrix, appears to be decent, being outmatched only by Logistic Regression. Again, due to the imbalance in class values, classes 2 and 3 did not get any accurate prediction.
+
+# Conclusion
+In this lab, we showed you how to use the vanilla `SVM`, using the *caret* package's wrapper of the `Linear SVM` implementation from the *kernlab* package. Compare these results to the previous labs. In the next lab, we will use the kernel method for a more robust `SVM` model that can model the non-linearity in the data. 
+
+<!-- # Appendix: R Markdown Instructions -->
+<!-- Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*. -->
+
+<!-- When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file). -->

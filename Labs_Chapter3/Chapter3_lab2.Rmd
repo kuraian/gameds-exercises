@@ -1,0 +1,136 @@
+---
+title: "Chapter3_Lab2"
+output:
+  html_document:
+    df_print: paged
+---
+# Goal
+
+In this lab we will conduct some example inferential statistics on the VPAL data. We have prepared two types of datasets which contain game data for experienced ("ExpPos_GameData.csv"") and non-experienced players ("ExpPos_GameData.csv"). In this lab we will try to compare the groups of experienced vs. inexperienced in terms of quests completed and the amounts of kills they did in the game. Our hypothesis is that the experienced players will have completed more quests and more kills. We will then see if we can predict experience from the game log data and what variables are more predictive of such variable. 
+
+Let's first read in the data. 
+
+```{r}
+# read in the data
+InExperienced <- read.table("ExpNeg_GameData.csv", header=TRUE, sep=",")
+Experienced <- read.table("ExpPos_GameData.csv", header=TRUE, sep=",")
+```
+ 
+# T-Tests
+
+Now that we read in the two groups, we can compare them using a t-test. We first plot the histograms for the quests completed to check normality. Then we perform the t-tests. 
+```{r}
+#looking at Quests Completed
+hist(Experienced$Quest.Completed)
+h<-hist(Experienced$Quest.Completed, breaks=10, col="purple", xlab="Quests Completed", 
+  	main="Histogram with Normal Curve") 
+xfit<-seq(min(Experienced$Quest.Completed),max(Experienced$Quest.Completed),length=40) 
+yfit<-dnorm(xfit,mean=mean(Experienced$Quest.Completed),sd=sd(Experienced$Quest.Completed)) 
+yfit <- yfit*diff(h$mids[1:2])*length(Experienced$Quest.Completed) 
+lines(xfit, yfit, col="black", lwd=2)
+
+h<-hist(InExperienced$Quest.Completed, breaks=10, col="purple", xlab="Quests Completed", 
+  	main="Histogram with Normal Curve") 
+xfit<-seq(min(InExperienced$Quest.Completed),max(InExperienced$Quest.Completed),length=40) 
+yfit<-dnorm(xfit,mean=mean(InExperienced$Quest.Completed),sd=sd(InExperienced$Quest.Completed)) 
+yfit <- yfit*diff(h$mids[1:2])*length(InExperienced$Quest.Completed) 
+lines(xfit, yfit, col="black", lwd=2)
+
+hist(InExperienced$Quest.Completed)
+t.test (Experienced$Quest.Completed, InExperienced$Quest.Completed)
+
+```
+The results of the t-test here shows that the means are very different with a significant p-value. Therefore, we can conclude that these two groups are significantly different. The results also show that the mean of the experienced players is higher than the inexperienced ones, confirming our hypothesis. 
+
+Now let's see if the groups are also different in terms of the number of kills done. 
+Again, we will plot the histograms to check normality and then perform the t-tests. 
+```{r}
+hist(Experienced$Kills)
+hist(InExperienced$Kills)
+t.test (Experienced$Kills, InExperienced$Kills)
+```
+Notice that the histograms here are showing that the variable is not normally  distributed, so the results of the t-test may not be accurate. However, we will keep it as an exercise for you to normalize this variable and then repeat the t-test and see what you get and how different it is from the results here. 
+
+# ANOVA
+
+In this part of the lab, we will try to see how different levels of `expertese` (ranging from 1 to 3) can be explained by `gender`. For that example, we used VPAL data, we will read in the file with the data, basically two columns, expertise and gender. 
+
+We will start by loading up the libraries we need. 
+```{r}
+options(repos = c(CRAN = "http://cran.rstudio.com"))
+install.packages("compute.es", dependencies = TRUE)
+install.packages("car", dependencies = TRUE)
+install.packages("ggplot2", dependencies = TRUE)
+install.packages("multcomp", dependencies = TRUE)
+install.packages("pastecs", dependencies = TRUE)
+install.packages("WRS",repos="https://r-forge.r-project.org/projects/psychor/", dependencies = TRUE)
+
+library(WRS2)
+library(compute.es)
+library(car)
+library(ggplot2)
+library(multcomp)
+library(pastecs)
+```
+
+
+We will read in a data. 
+```{r}
+#read the data
+VPALData <- read.table("GamingExpertese&Gender.csv", header=TRUE, sep=",")
+
+#we can explore the descriptive statistics by Gender 
+by(VPALData$Expertise, VPALData$Gender, stat.desc)
+```
+
+We will then check the data for the assumptions of `ANOVA`. In particular, we will need to check if the variance of the groups are not statistically different, establish homogeniety. To do that, we will use `Levene test`, as follows:
+
+```{r}
+VPALData$Gender = as.factor(VPALData$Gender)
+leveneTest(VPALData$Expertise, VPALData$Gender, center=mean)
+
+```
+
+As you can see from the output shown above, the result shows statistical significance, meaning that the groups' variance are actually statistically significant. For this reason, we cannot use regular `ANOVA`, and instead we can use `Welch's F` test or `Robust ANOVA`. Below we try out both techniques, starting with Welch F. 
+```{r}
+#In this case, since the variance between groups are different, we can apply Welch's F or use Robust Anova
+oneway.test(Expertise~Gender, data = VPALData)
+
+```
+As you can see from the result above. The result shows that the effect of `Gender` on `Expertise` is significant, as shown with the very low p-value. 
+
+Similarly, we can use robust ANOVA. 
+
+```{r}
+#We can do also robust ANOVA, running various tests
+
+t1way(Expertise ~Gender, data = VPALData, tr =0.1)
+t1waybt(Expertise~Gender, data=VPALData, tr=0.05)
+
+```
+Both tests show a very low p-value indicating significance. 
+
+In some cases, we may want to look into a factorial design, such as the effect of `gender` and `number of quests completed` on expertise. We can also look at the interaction effect between `gender` and `number of quests completed`. To do this we will use `Factorial ANOVA`. This can be done as follows. We will first load the new data with the added columns and then build the model. 
+
+```{r}
+#the depedant variable is the game expertise
+
+VPALData2 <- read.table("VPALCovariats.csv", header=TRUE, sep=",")
+
+VPALData2$Gender <- factor (VPALData2$Gender, levels = c("1","2"))
+
+model <- aov (GameExp ~ Gender*Quest.Completed, data=VPALData2)
+anova(model)
+```
+
+As you can see from the model above, it looks like the model shows a signficant effect of `Gender` on `Expertise` as well as `Quest.Completed` on `Expertise`. However, it shows no evidence of the interaction effect between `Gender` and `Quest.Completed` on `Expertise`. 
+
+```{r}
+
+summary.lm(model)$r.squared
+```
+The `R sqaured` here is `0.45`, which means that the model can explain 45% of the variance. This is great.  
+
+As you go through the book in particular in the machine learning chapters, we will start introducing prediction algorithms, like regression, support vector machines, etc. which will give us a lot better modeling techniques to deal with the data set we have here. 
+
+In conclusion, Chapter 3 goes through descriptive and inferential statistics. In this lab, we went through a simple exercise of showing you how to do t-tests to compare two groups in your data and also try to predict using ANOVA. 

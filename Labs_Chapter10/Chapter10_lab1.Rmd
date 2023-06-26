@@ -1,0 +1,143 @@
+---
+title: "Chapter10_Lab1"
+output:
+  html_document:
+    df_print: paged
+---
+# Goal
+The goal of this lab is to construct a sequence and perform some simple analysis of the sequence. 
+
+The code below reads in the data described in the chapter. This data is synthetic developed based on other game data for the purpose of analysis. Further, for the purposes of clarity and efficiency, we will use a small dataset of 50 sequences. We will leave it to you as an exercise to try the functions below with the larger dataset, such as the one that is uploaded with this chapter with 30,000 sequences.  
+
+For the purpose of sequence analysis, we will use the `TraMineR` library. Therefore, we will load this library first. 
+
+```{r}
+options(repos = c(CRAN = "http://cran.rstudio.com"))
+#install.packages("TraMineR", dependencies = TRUE)
+library("TraMineR")
+
+playerData <- read.table("Dota_Segmented.csv", header=TRUE, sep=",")
+
+#disoplaying the first 20 rows in the data
+playerData[1:20,]
+
+```
+
+# Building the Sequence Structure
+
+We create a sequence using the `Seqdef` function. This function takes in (a) an alphabet, spelling out the different actions in the sequence, (b) the data for the sequence, (c) the colors and (d) labels for each sequence, which can be the same as the alphabet. 
+
+```{r}
+
+#in order to create a sequence, we need to create alphabet for the #sequence. For purposes of plotting, we need colors that are unique #for each alphabet.
+playerData.labels <- c("solo", 
+                       "fight",
+                       "kill_hero", 
+                       "teaming",
+                       "death",
+                       "harrassed_by_opponents", 
+                       "fight_diminishes",
+                       "fight_intensifies",
+                       "team_fight",
+                       "full_team_assembly",
+                       "",
+                       " ")
+playerData.scode <- c("solo", 
+                      "fight",
+                      "kill_hero", 
+                      "teaming",
+                      "death",
+                      "harrassed_by_opponents", 
+                      "fight_diminishes",
+                      "fight_intensifies",
+                      "team_fight",
+                      "full_team_assembly",
+                      " ")
+playData.colors <- 
+  c("purple", "green", "black", "yellow", "red", "orange", 
+    "cyan", "pink", "gray", "blue", "white")
+
+
+playerData.seq <- seqdef(playerData, 4:95, alphabet = playerData.labels,states=playerData.scode, labels = playerData.scode,xstep=6, cpal = playData.colors)
+
+```
+
+The `seqdef` function creates a sequence data. As you see from the output, it has found several missing values in the sequences. In this dataset, we have sequences of different lengths which is then interpreted as missing values. 
+
+Once we have the sequence in the right structure it is then possible to use the library functions to inspect the sequences and explore the data. 
+
+# Exploratory Analysis of the Sequence 
+
+The first thing to do is to plot the sequences to see how they vary. For that we use the variations of the `seqplot` function. Below we have some code using these variations to show you the differences. Note that `seqlegend` function will create the legend that we will then use for all the other charts. 
+
+```{r}
+
+#create a legend for the data that will be plotted in the charts below. 
+seqlegend(playerData.seq, fontsize = .7)
+
+#displays all sequences in the data
+seqIplot(playerData.seq, border = NA, title = "All Sequences", with.legend ="FALSE", 
+         missing.color = "#FFFFFF")
+
+#displays only the first 10 sequences
+seqiplot(playerData.seq, border = NA, title = "First 10 Sequences", with.legend ="FALSE", 
+         missing.color = "#FFFFFF")
+
+#plots the most frequence sequences
+seqfplot(playerData.seq, border = NA, title = "Most Frequent Sequences", with.legend ="FALSE", 
+         missing.color = "#FFFFFF")
+
+# Plots the state distribution by time points
+seqdplot(playerData.seq, border = NA, title = "State Distribution", with.legend ="FALSE",
+         missing.color = "FFFFFF")
+```
+
+You can also group these sequences by segment of play, so you can compare the frequent sequences per loction/level or game segment.
+
+```{r}
+
+#create a legend for the data charts below
+seqlegend(playerData.seq, fontsize = .7)
+
+#displays all sequences in the data
+seqIplot(playerData.seq, group=playerData$segment, border = NA, with.legend ="FALSE", missing.color = "#FFFFFF")
+
+#plots the most frequence sequences
+seqfplot(playerData.seq, group=playerData$segment, border = NA, with.legend ="FALSE", missing.color = "#FFFFFF")
+
+```
+
+# Frequencies of a state occupying a specific position
+
+As discussed in the Chapter, another interesting function to use is the `seqstatd`, which tells us what the frequencies are of a state occupying a specific position or time slot. For example, Solo seems to have a very high probability of occupying any of the timeslots. However, one can imagine some actions may have more probability later in the game than earlier, for example. 
+
+```{r}
+seqstatd(playerData.seq)
+
+```
+
+# Transition Probabilities
+
+As discussed in the Chapter, another element that would be interesting to explore is the probability of transitioning from one state to another.  This can be explore through the function `seqtrate`. 
+
+```{r}
+playerData.trate <- seqtrate(playerData.seq)
+round(playerData.trate, 2)
+
+```
+
+# Shannon Entropy 
+
+A measure also discussed in Chapter 10 as well as other earlier Chapters in the book is the measure of entropy, which gives us a measure of how diverse the states are at a given position. We can use this package, specifically the to do this we will use the `seqHplot` function to display this. 
+
+```{r}
+
+#Shannon Entropy for the entire data set
+seqHtplot(playerData.seq)
+
+#Shannon Entropy per game segment
+seqHtplot(playerData.seq, group=playerData$segment)
+
+```
+
+

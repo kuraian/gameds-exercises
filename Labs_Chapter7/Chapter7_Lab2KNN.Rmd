@@ -1,0 +1,172 @@
+---
+title: "Chapter 7 Lab 2 - K-Nearest Neighbor (KNN)"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Goal
+In this lab, we will try to predict players' skill level, i.e., column `SkillLevel`. In the data set, a player's skill level is represented as a number between 0 and 3, with 0 being novice level and 3 expert. Intuitively, how skillful a player is in the game should be reflected through their in-game performance, such as number of kills and deaths. 
+
+We are going to use `KNN` model in this lab, which reflects the hypothesis: If players have similar in-game performance, they should have similar skill level. 
+Is this true? We'll see.
+
+```{r}
+# preparation: import libraries to be used. 
+options(repos = c(CRAN = "http://cran.rstudio.com"))
+install.packages("caret", dependencies = TRUE)
+library("caret")
+```
+
+
+# Step 1: Load the data set 
+
+Similar to Lab 7.1, we first load the data set into a dataframe, and examine it below.
+
+```{r}
+# we are assuming the data file is in the current directory. If not, you may want to set the current directory to where the data file is or adjust the path in the read.csv line below.
+
+# read the CSV file
+DotaData <- read.csv("DoTalicious_cleaned1000players.csv", fileEncoding="UTF-8-BOM")
+summary(DotaData)
+```
+
+As a recap, we can observe that:
+  1. Most features take continuous quantitative values, except `PlayerID` and `SkillLevel` 
+  2. `SkillLevel` has one missing value, namely " SkillLevelNull"
+  3. `TotalTime` was loaded as discrete values.
+
+As such, `TotalTime` is going to be converted into quantitative, the row with `SkillLevel` equal to  `SkillLevelNull` removed, and`PlayerID` excluded from our variable set. 
+
+```{r}
+# convert TotalTime
+DotaData$TotalTime <- as.numeric(DotaData$TotalTime)
+
+# exclude the row with SillLevel = SkillLevelNull
+DotaData$SkillLevel <- as.factor(DotaData$SkillLevel)
+DotaData <- DotaData[!(DotaData$SkillLevel == " SkillLevelNull"),]
+
+# use factor in place of as.factor to remove " SkillLevelNull" from the list of factors
+DotaData$SkillLevel <- factor(DotaData$SkillLevel)
+
+# exclude PlayerID
+DotaData <- DotaData[-1]
+
+DotaData = na.omit(DotaData)
+
+summary(DotaData)
+```
+
+Further examining `SkillLevel` shows that the majority of players are novice (i.e., level 0 and 1).
+
+```{r}
+#look at the totals to see where the majority of the points lie in terms of skills sets
+table(DotaData$SkillLevel) 
+```
+
+# Step 2: Set up training and testing set and preprocess
+
+Next, we are going to split the data into training and testing set.
+
+```{r}
+# setting the random seed: you can choose your own seed.
+set.seed(101)
+
+#Spliting data as training and test set. Using createDataPartition() function from caret
+# as you can see we are taking 75% of the data to train and the rest to test. 
+
+indxTrain <- createDataPartition(y = DotaData$SkillLevel,p = 0.75,list = FALSE)
+training <- DotaData[indxTrain,]
+testing <- DotaData[-indxTrain,]
+summary(training)
+summary(testing)
+```
+
+Notes:  
+* `set.seed()` is the function that allows us to set a random seed for all subsequent routines that use random sampling
+* `createDataPartition` randomly selects a set of row indices for training set. We set the ratio for training data to be 75\% using `p=0.75`
+
+## Preprocessing
+
+We are going to standardize the independent attributes of the training data. The question is: Should we *standardize* or *normalize* the features? As discussed in Chapter 2, while both *standardization* and *normalization* are used for scaling data features, each has their own pros and cons (please refer to Chapter 2 for more information). Standardization is more robust against outliers, so in this case, since our data appear to have outliers, standardization will be more suitable than normalization.
+
+With `caret`, standardization can be achieved by apply `center` (i.e., subtract by the mean) and `scaling` (i.e., divided by the standard deviation) in sequence.
+
+```{r}
+preProcValues <- preProcess(x = training,method = c("center", "scale"))
+preProcValues
+```
+
+`preProcValues` captures the preprocessing model extracted from the input data, i.e., `training`. Specifically, `preProcValues` contains information about the procedures to be applied, i.e., centering and scaling, as well as relevant values such as the means and standard deviations of numeric columns. Note that factor columns, e.g., *SkillLevel*, are ignored. 
+
+Next, we will apply this model on both the training and test data.
+
+```{r}
+# transform the training data using preProcValues
+trainTransformed <- predict(preProcValues, training)
+summary(trainTransformed)
+
+# Apply the same processing, using preprocessing information from the training data, onto the test data
+testTransformed <- predict(preProcValues, testing)
+summary(testTransformed)
+```
+
+At this point, you may ask: Why didn't we standardize the original data set first, then split into training and test sets? That would have saved us the hassle of the complicated preprocessing steps above (i.e., using `preProcValues`), right? 
+
+However, we would be **cheating** if we do so. When building a predictive model meant for predicting values unseen before, you are not supposed to know anything about the test set. So, preprocessing the original data set altogether means that you are using test set's data at training phase, which is prohibited. You can also extrapolate what that means to the data when you do this and you will see how this can impact the data, and thus is problematic. 
+
+# Step 3: Apply the KNN model
+
+Now, we are applying the KNN model on the data.
+
+```{r}
+set.seed(101)
+ctrl <- trainControl(method="repeatedcv", number = 10, repeats = 3)
+knn_output <- train(SkillLevel ~ ., data = trainTransformed, method = "knn", trControl = ctrl, tuneLength = 20)
+
+#Output of the training
+knn_output
+```
+
+Some notes:
+* As we apply the `KNN` model, we have the option to pass in a parameter called *trainControl*. This optional parameter allows us to control the tuning process. In the code above, we set the tuning to use repeated cross validation (`repeatedcv`). `number` sets the number of folds, and `repeats` the number of separate cross-validations is run.
+* The `tuneLength` parameter defines the total number of hyperparameter combinations that will be evaluated. Since KNN only has one hyperparameter (i.e., `K`), `tuneLength` sets the number of K values to try.
+* The accuracy results shown are those of cross validation 
+
+More information on `trainControl`, and more generally the `caret` package can be found in *Further Readings* in the chapter. In the above setup, we:
+* applied standardization to the training data, and
+* used repeated cross validation to tune the parameter `K` 
+
+Plotting the accuracies below, we can see clearly that the highest accuracy was achieved when `K=5`or `k=7` as shown in the output. 
+```{r}
+plot(knn_output)
+```
+
+Use the trained KNN model to predict labels:
+```{r}
+knn_predict <- predict(knn_output,newdata = testTransformed )
+#Get the confusion matrix to see accuracy value and other parameter values
+confusionMatrix(knn_predict, testTransformed$SkillLevel )
+```
+
+The results here show confusion matrix, which will be discussed in more detail in Chapter 8. But for now it shows you how many labels were predicted correctly and how many were mislabeled and how they were mislabeled. 
+
+From the results we can see, our best KNN model's accuracy is 81.86\%. To know how good this is, we can compare its performance with a dummy classifier, implemented in *caret* as `nullModel`.
+
+```{r}
+dummy_model <- nullModel(y=trainTransformed$SkillLevel)
+dummy_predict <- predict(dummy_model, newdata = testTransformed)
+confusionMatrix(dummy_predict, testTransformed$SkillLevel )
+```
+
+For classification problems, `nullModel` always returns the class with the highest frequency in the training data. That's why all its predictions, as shown in the resultant confusion matrix, take value 0. The accuracy of this dummy model is 51.63\%.
+
+We can see that KNN performs much better than this dummy baseline.
+
+# Conclusion
+In this lab, we showed how to train `KNN` models for classification tasks, using the *caret* package. Other steps in the ML process such as preprocessing (e.g., standardizing the data) and hyperparameter tuning were also demonstrated.
+
+<!-- # Appendix: R Markdown Instructions -->
+<!-- Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*. -->
+
+<!-- When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file). -->

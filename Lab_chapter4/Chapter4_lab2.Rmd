@@ -1,0 +1,75 @@
+---
+title: "Chapter4_Lab2"
+output:
+  html_document:
+    df_print: paged
+---
+# Goal
+
+Is to replicat the PCA lab (Lab 1) but with both categorical and numerical variables. For demonstration we will use the Dota data we used in the previous lab, with two categorical variables: `skill level` and `gender`. It should be noted that while `skill level` is in the original dataset, we added the gender to this dataset so we can demonstrate what you can do when you have more than one categorical variable. `Skill level` is a factor variable with values: `-1`, `0`, `1`, or `2`. Although it is represented numerically, it is a categorical variable as the distance between 0 and 1 or -1 is not consistent. 
+
+Let's first read in the table. 
+
+```{r}
+#We are going to be using the PCA library so we need to load that up
+library(PCAmixdata)
+
+#read the table and display the head of the table
+Dota_datamixed <- read.table("Dota_normalized_mixed.csv", header=TRUE, sep=",")
+head(Dota_datamixed)
+```
+
+#Grouping Numerical and Categorical 
+
+We then separate the data into categorical variables and numerical variables. 
+
+```{r}
+#two sets numerical and categorical
+Dota_Numerical <- Dota_datamixed[,1:15]
+Dota_Numerical[1:10,]
+
+Dota_Categorical <- Dota_datamixed[,16:17]
+Dota_Categorical$SkillLevel <- as.factor(Dota_Categorical$SkillLevel)
+Dota_Categorical[1:10,]
+```
+
+#Run PCAmix
+
+We first run the PCAmix and then look at the Eigen vectors on the dimensions. 
+Once you see that, you can see that 5-6 dimensions explains most of the variance, with 90% at dim =7 and 86% at dim=6. So we chose 6 dimensions. 
+
+Similar with PCA, we can also get the variables in the new coordinates as shown in the code below. 
+```{r}
+#PCAmix
+Dota_PCAmix <- PCAmix(X.quanti = Dota_Numerical, X.quali = Dota_Categorical, ndim=6, graph=FALSE)
+
+#eigen vectors and their variance
+Dota_PCAmix $eig
+
+#variables in the new coordinates
+head(Dota_PCAmix$ind$coord )
+
+```
+
+#Plotting
+
+This plot will plot the link between the variables and the principle components. As you can see, almost all numerical variables except `KillsPerMin` and `Points` are linked to the first component (shown as Dim 1 in the graph). But `KillsPerMin` is almost orthogonal to the first component. `Skill Leve`l and `Points` are both linked to both second Principle Component and the first one. We can further inspect the loadings to understand the values per variable for each new component. 
+```{r}
+#plotting all variables
+plot(Dota_PCAmix ,choice="sqload",coloring.var=T, leg=TRUE, posleg="topright", main="(d) All variables")
+```
+
+#Loadings 
+
+We can also get the loadings for the quantitative and qualitative coordinates. 
+```{r}
+
+Loadings_quant <- Dota_PCAmix $quanti.cor
+Loadings_quant
+
+Loadings_qual <- Dota_PCAmix $categ.coord
+Loadings_qual
+
+```
+
+In conclusion, through this lab, you have seen how to apply PCA on a mixed categorical and numerical data types. You can then use the PCs as you did in Lab 1. 

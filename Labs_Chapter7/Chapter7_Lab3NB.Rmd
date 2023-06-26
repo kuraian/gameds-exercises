@@ -1,0 +1,124 @@
+---
+title: "Chapter 7 Lab 3 - Naive Bayes"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Goal
+In this lab, we, again, will try to predict players' skill level, i.e., column `SkillLevel`, which takes integer value between 0 and 3, with 0 being novice level and 3 expert. The `Naive Bayes` (NB) implementation in the `caret` package will be used.
+
+## Brief refresher
+`NB` estimates class probability by collating, using Bayes' Rule, independent variables' estimated probabilities from the training data. It assumes that the independent variables are conditionally independent from one another given class values, which simplifies the computations and allows it to run quickly.
+
+## Preparation
+```{r}
+# install packages: should be run only once
+
+options(repos = c(CRAN = "http://cran.rstudio.com"))
+install.packages("caret", dependencies = TRUE)
+install.packages("klaR", dependencies = TRUE)
+
+# import the "caret" library and its dependency, klaR, which implements the naive bayes classifier
+library("klaR")
+library("caret")
+```
+
+# Step 1: Load the data set 
+
+```{r}
+# we are assuming the data file is in the current directory. If not, you may want to set the current directory to where the data file is or adjust the path in the read.csv line below.
+
+# read the CSV file
+DotaData <- read.csv("DoTalicious_cleaned1000players.csv", fileEncoding="UTF-8-BOM")
+summary(DotaData)
+```
+
+Clean up and set the correct data type.
+
+```{r}
+# convert TotalTime
+DotaData$TotalTime <- as.numeric(DotaData$TotalTime)
+
+# exclude the row with SillLevel = SkillLevelNull
+DotaData$SkillLevel <- as.factor(DotaData$SkillLevel)
+DotaData <- DotaData[!(DotaData$SkillLevel == " SkillLevelNull"),]
+
+# use factor in place of as.factor to remove " SkillLevelNull" from the list of factors
+DotaData$SkillLevel <- factor(DotaData$SkillLevel)
+
+# exclude PlayerID
+DotaData <- DotaData[-1]
+
+#removing any rows with NA
+DotaData = na.omit(DotaData)
+
+summary(DotaData)
+```
+
+# Step 2: Set up training and test set
+
+This is similar to the previous lab. 
+
+```{r}
+# setting the random seed
+set.seed(101)
+#Spliting data as training and test set. Using createDataPartition() function from caret
+indxTrain <- createDataPartition(y = DotaData$SkillLevel,p = 0.75,list = FALSE)
+training <- DotaData[indxTrain,]
+testing <- DotaData[-indxTrain,]
+summary(training)
+summary(testing)
+```
+
+## Data Standardization
+
+For `NB`, there is no need to preprocess the data other than dealing with missing values, as it is not prone to scaling issues.
+
+# Step 3: Apply the Naive Bayes model
+
+Now, we are applying the `Naive Bayes` model on the data. There will be some printouts as the result of running the `train` method, but you could ignore them.
+
+```{r}
+set.seed(101)
+ctrl <- trainControl(method="repeatedcv", number = 10, repeats = 3)
+nb_model <- suppressWarnings(train(SkillLevel ~ ., data = training, method = "nb", trControl = ctrl, tuneLength = 20))
+```
+
+Note that the above `train` function looks almost the same as the `train` function in Lab 7.2 on `KNN`. The only difference is that we set the `method` parameter to *nb* instead of *knn*, and that's the beauty of `caret`. It provides a wrapper that makes applying different methods efforstless.
+
+Print out details of the model.
+```{r}
+#Naive Bayes model of the training
+nb_model
+```
+
+Plotting the model will show the accuracy of the model with respect to different hyperparameter settings. As you can see, when the flag `usekernel` is *True* implies a non parametric distribution and *False* implies a normal distribution. More information on the model, and the meanings of parameters, can be found in the `klaR` documentation page (https://www.rdocumentation.org/packages/klaR/versions/0.6-14/topics/NaiveBayes)
+
+```{r}
+plot(nb_model)
+```
+
+Use the trained `NB` model to predict labels:
+```{r}
+nb_predict <- suppressWarnings(predict(nb_model,newdata = testing ))
+```
+Again, the `predict` function prints out some debugging information that you can ignore. 
+
+```{r}
+#Get the confusion matrix to see accuracy value and other parameter values
+confusionMatrix(nb_predict, testing$SkillLevel )
+```
+
+Our `NB` model's accuracy is 80\%, which is slightly lower than that of `KNN` model from Lab 7.2 (81.86\%), but higher than the dummy baseline (51.63\%). So, not bad! But as you can see from the confusion matrix, the models predicts skill level of 1 better than 2 and 3 but then we have more data for 1 than 2 and 3, and thus it makes sense for a probabilistic model like that one to have that bias. 
+
+Note that there is another implementation of `Naive Bayes` in `caret` from the library `naivebayes`, with method name "naive_bayes" instead of "nb". Check it out [here](https://cran.r-project.org/web/packages/naivebayes/naivebayes.pdf).
+
+
+# Conclusion
+In this lab, we showed how to train `Naive Bayes` models for classification tasks, using the *caret* package's wrapper of the Naive Bayes implementation from the *klaR* package.
+
+<!-- # Appendix: R Markdown Instructions -->
+<!-- Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*. -->
+
+<!-- When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file). -->

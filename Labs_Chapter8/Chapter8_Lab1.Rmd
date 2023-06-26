@@ -1,0 +1,137 @@
+---
+title: "Chapter 8 Lab 1 - Classification Model Evaluation using Scalar Metrics"
+---
+# Goal
+
+We are going to learn how to compute and interpret the following scalar metrics:  
+
+* Accuracy
+* True Positive rate (TPR), or sensitivity
+* True negative rate (TNR), or specificity
+* Precision
+* Recall
+* F-measure
+
+We will again consider the task of predicting players' `SkillLevel`, which takes integer value between 0 and 3, with 0 being novice level and 3 expert. 
+
+For illustrative purposes, consider the `Decision Tree` model from Chapter 7, lab 7 (note that you can use any other model you have trained so far for this purpose).
+
+## Preparation: Get the model
+
+We'll rerun the codes from Chapter 7, lab 7, to obtain the model below.
+
+Load libraries.
+```{r}
+options(repos = c(CRAN = "http://cran.rstudio.com"))
+install.packages("caret", dependencies = TRUE)
+install.packages("rpart", dependencies = TRUE)
+library("rpart")
+library("caret")
+```
+
+Load and clean up data.
+```{r}
+# read the CSV file
+DotaData <- read.csv("DoTalicious_cleaned1000players.csv", fileEncoding="UTF-8-BOM")
+
+
+# convert TotalTime
+DotaData$TotalTime <- as.numeric(DotaData$TotalTime)
+
+# exclude the row with SillLevel = SkillLevelNull
+DotaData$SkillLevel <- as.factor(DotaData$SkillLevel)
+DotaData <- DotaData[!(DotaData$SkillLevel == " SkillLevelNull"),]
+
+# use factor in place of as.factor to remove " SkillLevelNull" from the list of factors
+DotaData$SkillLevel <- factor(DotaData$SkillLevel)
+
+# exclude PlayerID
+DotaData <- DotaData[-1]
+
+DotaData = na.omit(DotaData)
+
+summary(DotaData)
+```
+
+Set up training and test set.
+```{r}
+# setting the random seed
+set.seed(101)
+#Spliting data as training and test set. Using createDataPartition() function from caret
+indxTrain <- createDataPartition(y = DotaData$SkillLevel,p = 0.75,list = FALSE)
+training <- DotaData[indxTrain,]
+testing <- DotaData[-indxTrain,]
+
+```
+
+Build the model and use it to predict the test set.
+```{r}
+set.seed(101)
+ctrl <- trainControl(method="repeatedcv", number = 10, repeats = 3)
+dt_model <- train(SkillLevel ~ ., data = training, method = "rpart", trControl = ctrl, tuneLength = 20, model=TRUE)
+predicted <- predict(dt_model, newdata = testing)
+```
+
+# Step 2: Get performance measures
+
+Most of the performance measures we want are computed from the `confusionMatrix` function.
+```{r}
+confusionMatrix(predicted, testing$SkillLevel )
+```
+
+As you learned from Chapter 8, the scalar measures are all computed from the confusion matrix. The confusion matrix here shows the Actual Classes as columns, and Predicted Classes as rows.
+
+Since we are dealing with multi-class classification, not binary, we will have True/False Positive/Negative values with respect to each class value. For example, with respect to Class 0,
+
+* TP$_0$ (the number of times Class-0 data is classified as 0) is `99`
+* FP$_0$ (the number of times non-Class-0 data is classified as 0) is `5`
+* TN$_0$ (the number of times non-Class-0 data is classified as not 0, i.e., 1, 2, or 3) is `92 + 4 + 3 = 99` 
+* FN$_0$ (the number of times Class-0 data is classified as not 0) is `12`  
+
+Note that we needed to do some summation over the related entries in the matrix to compute the above measures for each class.
+
+## Accuracy
+`Accuracy` is found in *Overall Statistics* section, and computed using the following formula:
+$$\text{Accuracy} = \frac{\sum_{i=0}^{3}{\text{TP}_{i}}}{\text{Total number of data points}}$$
+
+Notice how this formula is a generalization of Equation 8.3 shown in the chapter, when there are only two classes. True Negative in the binary case is the same as the True Positive of the Negative class.
+
+The accuracy shown in *Overall Statistics* was computed as: $\frac{99 + 92}{215}=0.888372 \approx 0.8884$.
+
+## Sensitivity and Specificity
+
+Similar to TP, FP, TN, and FN, `Sensitivity` and `Specificity` are measures specific to each class. That's why they are shown in section *Statistics by Class*.
+
+Sensitivity is the fraction of correctly assigned positive points. Specifically, with class $i$ (and respective measures TP$_i$, FP$_i$, TN$_i$, and FN$_i$):
+$$\text{Sensitivity of Class }i =\frac{\text{TP}_i}{\text{TP}_i + \text{FN}_i}$$
+
+For example, `Sensitivity` of Class 0 is $\frac{99}{99+12}=0.89189189 \approx 0.8919$
+
+`Specificity` is the fraction of correctly assigned negative points, so with class $i$, it can be computed as follows:
+$$\text{Specificity of Class }i =\frac{\text{TN}_i}{\text{TN}_i + \text{FP}_i}$$
+
+For example, `Specificity` of Class 0 is $\frac{92 + 4 + 3}{92 + 4 + 3 + 5}=0.951923 \approx 0.9519$
+
+## Precision, Recall, and F-measure
+
+`Precision`, `Recall`, and `F-measure` are computed using the `confusionMatrix` function, but with parameter `mode` set to "prec_recall".
+
+```{r}
+confusionMatrix(predicted, testing$SkillLevel, mode = "prec_recall")
+```
+
+Similar to `sensitivity` and `specificity`, `precision`, `recall`, and `F-measure` (shown in the result as `F1`) are class-specific. The formulae are as follows. 
+$$\text{Precision of Class }i =\frac{\text{TP}_i}{\text{TP}_i + \text{FP}_i}$$
+$$\text{Recall of Class }i =\frac{\text{TP}_i}{\text{TP}_i + \text{FN}_i}$$
+$$\text{F1 score of Class }i = \frac{2}{\frac{1}{\text{precision}_i} + \frac{1}{\text{recall}_i}} = \frac{2\cdot\text{precision}_i\cdot\text{recall}_i}{\text{precision}_i + \text{recall}_i}$$
+
+Note that when either `Precision` or `Recall` is 0, F1 score is not available, i.e., shown as NA. NA values in this case denotes the case when there is division by zero (such as in Class 2 and Class 3).
+
+For example, with class 0:
+
+* Precision is $\frac{99}{99+5} \approx 0.9519$
+* Recall is $\frac{99}{99+12} \approx 0.8919$
+* F1 Measure is $\frac{2\cdot0.9519\cdot0.8919}{0.9519+0.8919} \approx 0.9209$
+
+# Conclusion
+In this lab, we showed you how to compute and obtain scalar performance metrics for classification models such as `Decision Tree`. You can perform this evaluation on other models you for Chapter 7 labs. 

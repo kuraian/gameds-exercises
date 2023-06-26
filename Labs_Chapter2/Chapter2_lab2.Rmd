@@ -1,0 +1,59 @@
+---
+title: "Chapter2_lab2"
+output:
+  html_document:
+    df_print: paged
+---
+
+#Goal 
+Reading files is the first important step to analyzing data. As discussed in the chapter, there are different types of files that can store your data; oftentimes data is stored in a database. In this chapter we will be dealing with VPAL data which is stored in text files. Therefore, in this lab, we will show you how to import in data if you have data stored in a text file with different keywords or formats. 
+
+#Parsing the file 
+
+In order to parse the file, we first need to develop a dataframe to hold the data in. We need to know what structure we will be reading in from the file. In our example here, we will assume that we will get a dataframe for quest data, which contains 3 columns: <i>Quest Name</i>, <i>Status of the quest</i>, and <i>timestamp</i>. So we instantiate a new variable called <i> QuestData </i> as follows:
+```{r}
+QuestData <- data.frame('string', 'Status', 'numeric', stringsAsFactors=FALSE)   # Spelling error changed 
+```
+
+We then will open the file that contains the text data for reading. To open a file, we will use the function <i>file </i>, with the arguments: file name and <i>open="r"</i> indicating that we are openning a file for reading. Then we start by reading in the lines through <i> readLines</i> function. We then loop through the length of the lines, taking each line one by one, <i> line[i]</i>, in the loop. For each line, you can check the keyword. In our data file for VPAL, we put the keyword for each action as the first word in the line. So if the action is quest related, it will have the keyword: "Quest". Thus, if the keyword is "Quest", we can then start parsing the line, otherwise we can skip this line and take the next. When parsing the line, we use the function <i> strsplit</i>, which splits the string by a delimiter. In our case, we separated each part of the line by a coma, so we can use that as our delimiter, so we call <i>strsplit(line[i],",")</i>. Using this function, we can take the columns needed in terms of Quest Name, Status and timestamp. We then add these variables to our dataframe. To do that, we used the variable called <i>newrow</i>, which is then instantiated as a vector of Quest Name, Status and timestamp values we got from the strsplit function. We then rbind our <i>QuestData </i>data frame variable with the content of it in addition to the <i>newrow</i>. We then close the file after we exit the loop.
+```{r}
+
+myfile=file("103.txt",open="r")
+line=readLines(myfile) 
+long = length(line)
+#loop over the length of the rows within the file
+for (i in 1:long) {
+  if (line[i]!="") {
+  #split the row into strings, split on ‘,’
+  actionStr <- strsplit(line[i], ",")
+  #action is the first word, which is the action word
+  action <- sapply(actionStr, '[', 1)
+ #if it is Quest, then get the info
+  if (action == "Quest") {
+      timestamp <- sapply(actionStr, '[', 3)
+      Questname <- sapply(actionStr, '[', 4)
+      Queststatus <- sapply (actionStr, '[', 5)
+      if (Queststatus == " Started")  
+      {
+        #Queststatus <- "Started"
+        newrow <- c(Questname, Queststatus, timestamp) 
+        QuestData <- rbind (QuestData, newrow)
+      }
+      else if (Queststatus == " Completed") 
+      { 
+        #Queststatus <- "Completed"
+        newrow <- c(Questname, Queststatus, timestamp) 
+        QuestData <- rbind (QuestData, newrow)
+      }
+   }
+  }
+}
+#close my file
+close(myfile)
+```
+
+We can then look at the data frame we developed:
+```{r}
+QuestData
+```
+

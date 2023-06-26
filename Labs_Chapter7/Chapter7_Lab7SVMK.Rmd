@@ -1,0 +1,144 @@
+---
+title: "Chapter 7 Lab 7 - Support Vector Machine (SVM) with the Kernel Trick"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Goal
+This lab is a continuation of Lab 7.6, where we learned how to use `SVM`. The performance of the `Linear SVM` obtained in the previous lab is decent, though not the best, so there could be some room for improvement here. That's what we want to investigate in this lab, to see if using other kernels may help boost the performance of `SVM`.
+
+We will continue to use the `kernlab` and `caret` packages in this lab. 
+
+## Brief refresher
+One approach to make classification easier is to *sparsify* the data by elevating them to a higher dimensional space, with the hope to make classes more separable. The kernel trick is a technique that does that efficiently, by bypassing explict project steps.
+
+`Support Vector Machine` (SVM), among other techniques, can be enhanced with the kernel trick to compute non-linear decision boundaries.
+
+## Preparation
+
+```{r}
+options(repos = c(CRAN = "http://cran.rstudio.com"))
+install.packages("caret", dependencies = TRUE)
+install.packages("kernlab", dependencies = TRUE)
+library("kernlab")
+library("caret")
+```
+
+# Step 1: Load the data set 
+
+```{r}
+# (optional) set working directory
+# setwd("../data/")
+# read the CSV file
+DotaData <- read.csv("DoTalicious_cleaned1000players.csv", fileEncoding="UTF-8-BOM")
+summary(DotaData)
+```
+
+Clean up and set the correct data type.
+
+```{r}
+# convert TotalTime
+DotaData$TotalTime <- as.numeric(DotaData$TotalTime)
+
+# exclude the row with SillLevel = SkillLevelNull
+DotaData$SkillLevel <- as.factor(DotaData$SkillLevel)
+DotaData <- DotaData[!(DotaData$SkillLevel == " SkillLevelNull"),]
+
+# use factor in place of as.factor to remove " SkillLevelNull" from the list of factors
+DotaData$SkillLevel <- factor(DotaData$SkillLevel)
+
+# exclude PlayerID
+DotaData <- DotaData[-1]
+
+DotaData = na.omit(DotaData)
+
+summary(DotaData)
+```
+
+Check if there is any missing value (NA here means Not Available). If it returns *False*, we're good to go. Just like we did in the previous labs, if there are any NAs, which is the case here, we will remove the rows with the NA in it using the `omit` function. 
+```{r}
+anyNA(DotaData)
+```
+
+
+# Step 2: Set up training and test set
+
+```{r}
+# setting the random seed
+set.seed(101)
+#Spliting data as training and test set. Using createDataPartition() function from caret
+indxTrain <- createDataPartition(y = DotaData$SkillLevel,p = 0.75,list = FALSE)
+training <- DotaData[indxTrain,]
+testing <- DotaData[-indxTrain,]
+summary(training)
+summary(testing)
+```
+
+## Data Standardization
+
+We are going to standardize the data just in case.
+
+```{r}
+preProcValues <- preProcess(x = training,method = c("center", "scale"))
+preProcValues
+```
+
+Apply preprocessing on both training and test data.
+
+```{r}
+# transform the training data using preProcValues
+trainTransformed <- predict(preProcValues, training)
+summary(trainTransformed)
+
+# Apply the same processing, using preprocessing information from the training data, onto the test data
+testTransformed <- predict(preProcValues, testing)
+summary(testTransformed)
+```
+
+# Step 3: Apply the SVM model with Radial Basis Function kernel
+
+One of the most popular kernel used with `SVM` is the `Radial Basis Function (RBF)`, also referred to as `Gaussian kernel`. Let's try it here.
+
+## Train
+
+Use the same `train` function, but change the method to *svmRadial* instead.
+
+```{r}
+
+set.seed(101)
+ctrl <- trainControl(method="repeatedcv", number = 10, repeats = 3)
+rbf_svm_model <- train(SkillLevel ~ ., data = trainTransformed, method = "svmRadial", trControl = ctrl, tuneLength = 10)
+```
+
+You can observe that the training phase is now a lot slower, as the parameter `C` is tuned, as shown below.
+Now let's take a look at the model
+
+```{r}
+#looking at the model
+rbf_svm_model
+```
+
+```{r}
+#plotting the accuracy given C values. 
+plot(rbf_svm_model)
+```
+
+By plotting the accuracy against the cost parameter `C`, we can see that the optimal `C` is at around 4. 
+
+## Predict
+
+```{r}
+predicted <- predict(rbf_svm_model, newdata = testTransformed)
+confusionMatrix(predicted, testTransformed$SkillLevel )
+```
+
+When testing with our test set, `SVM` with `RBF kernel` appears to be the best model tried so far with overall high accuracy, probably the highest of all models we tried so far. Classes 2 and 3 appear to be completely ignored in the model though. 
+
+# Conclusion
+In this lab, we showed you how to run `SVM` with the `Radial Basis Function kernel` to solve the classification task, using the *caret* package's wrapper of the implementation from the *kernlab* package. You can compare these results with previous labs to see how better or worse this model is. 
+
+<!-- # Appendix: R Markdown Instructions -->
+<!-- Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*. -->
+
+<!-- When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file). -->

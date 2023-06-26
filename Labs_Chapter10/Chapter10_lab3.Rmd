@@ -1,0 +1,136 @@
+---
+title: "Chapter10_Lab3"
+output:
+  html_document:
+    df_print: paged
+---
+# Goal
+The goal of this lab is to introduce optimal matching and clustering on sequence data. 
+
+For the purposes of this lab we will use the same data we used in the previous lab. 
+We will use `TraMineR` as the library for this lab. We will start with loading the library and then loading the data, and creating a sequence as was discussed in lab 10.1, please consult lab 10.1 for more details.  
+
+```{r}
+
+library("TraMineR")
+
+#for the purpose of clustering, we will use the complete, unsegmented sequences for this lab.
+playerData <- read.table("Dota_Complete_Seq.csv", header=TRUE, sep=",")
+
+#in order to create a sequence, we need to create alphabet for the #sequence. For purposes of plotting, we need colors that are unique #for each alphabet.  
+playerData.labels <- c("solo", 
+                       "fight",
+                       "kill_hero", 
+                       "teaming",
+                       "death",
+                       "harrassed_by_opponents", 
+                       "fight_diminishes",
+                       "fight_intensifies",
+                       "team_fight",
+                       "full_team_assembly",
+                       "",
+                       " ")
+playerData.scode <- c("solo", 
+                      "fight",
+                      "kill_hero", 
+                      "teaming",
+                      "death",
+                      "harrassed_by_opponents", 
+                      "fight_diminishes",
+                      "fight_intensifies",
+                      "team_fight",
+                      "full_team_assembly",
+                      " ")
+playData.colors <- 
+  c("purple", "green", "black", "yellow", "red", "orange", 
+    "cyan", "pink", "gray", "blue", "white")
+
+#Because HAM distance does not work on sequences of different lengths, you will want to change the script below to only use the first 20 action states of each sequence. The full sequences can be used for the other measures.
+playerData.seq <- seqdef(playerData, 4:130, alphabet = playerData.labels,states=playerData.scode, labels = playerData.scode,xstep=6, cpal = playData.colors)
+
+#create a legend for the data charts used later
+seqlegend(playerData.seq, fontsize = .7)
+
+#to be able to see the sequences and their differences we chose 11 sequences in the middle of the sequence data. 
+seqIplot(playerData.seq[1:10,], with.legend ="FALSE")
+
+```
+
+# Optimal Matching
+
+We first learn how to calculate a distance or a similarity measure between sequences. `TraMineR` offers several functions to determine similarity between sequences. The `seqdist` function offers several direct measures based on the count of common attributes, such as 
+HAM (Simple Hamming distance), LCP (Longest Common Prefix), RLCP same as LCP but counts in reverse, and LCS (Longest Common Subsequence). To understand these measures further please refer to chapter 10, where these methods are defined in more depth. Here we will just apply them and compare them. 
+
+```{r}
+#distance measures between the 10 sequences. 
+
+#HAM distance measure - Does not work with sequences of different length. To run HAM distance, change the script in the section above to output equal length subsequences. Otherwise, comment out the line below to continue.
+#seqdist(playerData.seq[105:115,], method ="HAM")
+
+#LCP distance measure
+seqdist(playerData.seq[105:115,], method ="LCP")
+
+#LCS distance measure
+seqdist(playerData.seq[105:115,], method ="LCS")
+
+```
+
+Optimal Matching is another distance measure that would depend on how much it would cost to turn one sequence into another. Thus, a cost function is required from the user. `TraMineR` allows you to set the cost function using the function `seqsubm`. Two methods can be used with this function, a constant cost for each operation or a `TRATE` cost which is based on probability of observing the state, which would penalize changes that are not frequently observed. 
+
+```{r}
+#setting substitution cost using frequency measures
+seqcost.trate <- seqsubm(playerData.seq, method = "TRATE")
+round(seqcost.trate, 3)
+
+#setting substitution cost using constant measure, cval is the constant cost
+seqcost.constant <- seqsubm(playerData.seq, method = "CONSTANT", cval = 3)
+round(seqcost.constant)
+
+```
+
+We then need to set the distance function based on optimal matching and the cost function.
+
+```{r}
+#setting the distance using OM=Optimal Matching method with the TRATE cost
+#indel = 1 here means that we are setting the cost for insertions and deletions to 1
+playerData.om <- seqdist(playerData.seq, method="OM", indel = 1, sm=seqcost.trate)
+
+```
+
+# Finding the Most Representative Sequence given Optimal Matching Distance
+
+Another method that can be handy is to use the distance measure to determine most common or central sequence given the dataset. To do this we can use the `seqrep` function, as shown below. 
+
+```{r}
+
+#create a legend for the data charts below
+seqlegend(playerData.seq, fontsize = .7)
+
+#Rep sequence based on density criterion
+RepSequence2 <- seqrep(playerData.seq, diss = playerData.om, nrep=1)
+RepSequence2
+seqrplot(playerData.seq, diss=playerData.om, border=NA, with.legend ="FALSE")
+
+```
+
+# Clustering
+For clustering we will use the heirarchical clustering algorithm provided by the cluster library and the function agnes. You should already know how to do this since we discussed it in Chapter 6 and showed how to perform this in R in Lab 6.4. For a distance measure, we will use the data matrix produced by the OM method. 
+
+```{r}
+#load cluster library
+library(cluster)
+#use heirarchical clustering on the distance matrix produced by OM method
+clusterward <- agnes (playerData.om, diss=TRUE, method="ward")
+plot (clusterward, which.plots=2)
+#cut the tree at 4
+cluster4 <- cutree(clusterward, k=4)
+#display the table of the counts of the different types
+cluster4 <- factor(cluster4, labels= c("Type 1", "Type 2", "Type 3", "Type 4"))
+table(cluster4)
+#plot the cluster most frequent sequences 
+seqfplot(playerData.seq, group=cluster4, pbarw=T)
+#plot the bar chart of the operations and their mean occurances
+seqmtplot(playerData.seq, group=cluster4)
+```
+
+In conclusion, this lab showed you how to use various methods to determine distance between sequences. We focused on Optimal Matching and showed how to use such a distance measure as an input to a clustering method we learned about in Chapter 6 to see how the data clusters. We leave it as an exercise for you to interpret the clustering results in terms of the qualitative meaning of these clusters to evaluate the use of Optimal Matching given this data. 
