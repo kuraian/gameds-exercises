@@ -7,7 +7,7 @@ output:
 # Goal
 This is the first lab of several labs in this chapter. 
 
-In this lab, we will introduce different data types in R. These data types are: vectors, lists, data frame. We will discuss simple examples of variables of these types and ways to manipulate values in these data types. THe definition of these variable types are described in the chapter. Please review the chapter for a theoretical introduction. 
+In this lab, we will introduce different data types in R. These data types are: vectors, lists, data frame. We will discuss simple examples of variables of these types and ways to manipulate values in these data types. The definition of these variable types are described in the chapter. Please review the chapter for a theoretical introduction. 
 
 While in this book we will use and introduce different concepts and their use in R, we do not intend for these labs to be tutorials in R. We will use several advanced methods and expect readers to keep up with the pace in the book. Interested readers are advised to pick up a book on R or follow the many online tutorials when we introduce a concept or algorithms that are not completely covered in the labs. 
 
