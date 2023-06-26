@@ -47,7 +47,7 @@ myvariable
 myvariable[c(-2,-4)]
 ```
 
-You can also remove every other value in a vector usign logical c(TRUE, FALSE). 
+You can also remove every other value in a vector using logical c(TRUE, FALSE). 
 ```{r}
 myvariable
 myvariable[c(TRUE, FALSE)]

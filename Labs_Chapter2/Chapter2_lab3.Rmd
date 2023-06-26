@@ -22,14 +22,14 @@ As you can see, the result says "Warning: NA is introduced." This means that R f
 listOfNumbers
 ```
 
-With dataframes things are bit more complicated. Dataframes will store characters as factors by default, and thus the column will need to be turned into a character then into a numberic. That is due to the fact that factors are stored as numbers, and thus doing <i>as.numeric</i> on a factor will just convert it to the index number for that factor. Let's take the following example. We create a dataframe called <i> listPlayers</i> as we did in lab 1. We introduce a score that is purposefully a non-numeric: <i> 20*</i>. Then use the <i>as.numeric</i> function as before. Here is what we get:  
+With dataframes things are bit more complicated. Dataframes will store characters as factors by default, and thus the column will need to be turned into a character then into a numeric. That is due to the fact that factors are stored as numbers, and thus doing <i>as.numeric</i> on a factor will just convert it to the index number for that factor. Let's take the following example. We create a dataframe called <i> listPlayers</i> as we did in lab 1. We introduce a score that is purposefully a non-numeric: <i> 20*</i>. Then use the <i>as.numeric</i> function as before. Here is what we get:  
 ```{r}
 listPlayers <- data.frame(names= c("Tammy", "John", "Katherine", "Tom"), score= c("10","10","20*", "20"))
 listPlayers$score <- as.numeric(listPlayers$score)
 listPlayers
 ```
 
-What happened here is that R converted the score variable to a factor and then used the number for that factor. Factors are like "Enum"" in other programming langauges they will take the value of the factor, thus, 10 is 1, 20 is 2, and 20* is 3. 
+What happened here is that R converted the score variable to a factor and then used the number for that factor. Factors are like "Enum"" in other programming languages they will take the value of the factor, thus, 10 is 1, 20 is 2, and 20* is 3. 
 
 To do what we wanted to do to start with, we should convert the factor into a character first and then do <i> as.numeric </i>on it, as follows:
 ```{r}
@@ -41,7 +41,7 @@ listPlayers
 
 #Checking categories for Factors
 
-For factors, we can restrict the different types that you can read in. For example, let's say we have a variable called <i>heroType</i> that contains some hero types, and you want to make sure that you can restrict it to only: fighers, scout and mage. In this case, you do the following:
+For factors, we can restrict the different types that you can read in. For example, let's say we have a variable called <i>heroType</i> that contains some hero types, and you want to make sure that you can restrict it to only: fighter, scout and mage. In this case, you do the following:
 ```{r}
 heroType <- c("fighter", "scout", "fighter", "mage", "mage", "xx", "scout")
 heroType <- factor (heroType, levels=c("fighter", "scout", "mage"))
